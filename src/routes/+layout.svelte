@@ -1,9 +1,8 @@
 <script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
-
-	let { children } = $props();
+    // ... (otras importaciones y el let data = $props() )
+    let data = $props(); // <--- Asegúrate de que esto exista
 </script>
 
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
+<main>
+    {@render data.children} 
+</main>
