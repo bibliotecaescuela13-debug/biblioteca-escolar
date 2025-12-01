@@ -10,7 +10,7 @@
         onScanSuccess = (code: string) => console.log('Scanned:', code) 
     } = $props(); 
 
-    let scanInput: HTMLInputElement;
+    let scanInput = $state<HTMLInputElement>(); // Usar $state() y definir el tipo dentro
     let scanValue = '';
     let status = 'Listo para escanear. Haga clic en el campo y pase el escáner... (V5-FIX)';
     let isScanning = false; [cite: 5]
