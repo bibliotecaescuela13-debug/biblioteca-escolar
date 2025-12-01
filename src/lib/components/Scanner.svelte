@@ -12,7 +12,7 @@
 
     let scanInput: HTMLInputElement;
     let scanValue = '';
-    let status = 'Listo para escanear. Haga clic en el campo y pase el escáner.'; // El estado continúa desde aquí [cite: 4, 5]
+    let status = 'Listo para escanear. Haga clic en el campo y pase el escáner... (V5-FIX)';
     let isScanning = false; [cite: 5]
     
     // ... (el resto del código, como handleKeydown [cite: 7, 8, 9, 10] y onMount[cite: 11], se mantiene igual)
