@@ -16,7 +16,7 @@
 
         let authPromise;
         if (isRegistering) {
-            // Intenta el registro. Nota: Supabase Auth gestiona el envío de emails de confirmación.
+            // Intenta el registro Nota Supabase Auth gestiona el envío de emails de confirmación.
             authPromise = supabase.auth.signUp({
                 email,
                 password,

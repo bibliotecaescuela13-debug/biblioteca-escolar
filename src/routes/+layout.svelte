@@ -1,19 +1,24 @@
 <script lang="ts">
-    // Desestructurar 'children' directamente de $props() para un uso limpio
-    let { children } = $props(); 
-
-    // Opcional: Si necesitas todos los datos cargados por el servidor:
-    // let data = $props();
-    // Pero si usas la desestructuración, children ya está disponible.
+    // Desestructurar 'children' directamente de $props()
+    let { children } = $props();
 </script>
+
+<header>
+    <nav>
+        <a href="/search">Buscador</a>
+        <a href="/bibliotecario/devolucion">Devolución</a>
+        <a href="/bibliotecario/usuarios">Usuarios</a>
+        <a href="/">Salir</a>
+    </nav>
+</header>
 
 <main>
     {@render children()} 
 </main>
 
 <style>
-    /* Estilos básicos de layout y reset */
-    :global(body) {
+   /* ... deja los estilos tal como están, ahora sí funcionarán ... */
+   :global(body) {
         margin: 0;
         font-family: sans-serif;
         background-color: #f4f4f4;
@@ -22,14 +27,12 @@
     
     main {
         padding: 20px;
-        /* Esto centra el contenido principal de forma simple */
-        max-width: 1200px; 
+        max-width: 1200px;
         margin: 0 auto;
     }
     
-    /* Estilos para la cabecera/navegación que diseñamos */
     header {
-        background-color: #004d40; /* Verde oscuro, como la biblioteca */
+        background-color: #004d40;
         color: white;
         padding: 10px 20px;
         box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
@@ -46,6 +49,6 @@
         transition: color 0.3s;
     }
     nav a:hover {
-        color: #ffc107; /* Amarillo para el hover */
+        color: #ffc107;
     }
 </style>
