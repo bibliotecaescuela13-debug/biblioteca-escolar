@@ -1,21 +1,57 @@
-<script lang="ts">
+<script>
     import { onMount, onDestroy } from 'svelte';
     import { createWorker } from 'tesseract.js';
     
     // Usaremos esto para simular la detección o como base para un escáner real si lo implementamos
     
-    // 🔥 CORRECCIÓN: Unificamos ambas propiedades en una sola llamada a $props()
+    // 🔥 CORRECCIÓN 1: Unificamos ambas propiedades en una sola llamada a $props()
+    // 🔥 CORRECCIÓN 2: Eliminamos el tipado de TypeScript para el callback
     let { 
         title = 'Escáner de Código',
-        onScanSuccess = (code: string) => console.log('Scanned:', code) 
+        onScanSuccess = (code) => console.log('Scanned:', code) 
     } = $props(); 
 
-    let scanInput = $state<HTMLInputElement>(); // Usar $state() y definir el tipo dentro
+    // 🔥 CORRECCIÓN 3: Usamos $state() sin tipado (Svelte 5 en JS puro)
+    let scanInput = $state();
     let scanValue = '';
-    let status = 'Listo para escanear. Haga clic en el campo y pase el escáner... (V5-FIX)';
-    let isScanning = false; [cite: 5]
+    let status = 'Listo para escanear. Haga clic en el campo y pase el escáner.'; 
+    let isScanning = false;
+
+    // --- Lógica de Simulación (o base para un hardware de escáner real) ---
     
-    // ... (el resto del código, como handleKeydown [cite: 7, 8, 9, 10] y onMount[cite: 11], se mantiene igual)
+    // 🔥 CORRECCIÓN 4: Eliminamos el tipado de TypeScript para el evento
+    function handleKeydown(event) {
+        // Ignorar teclas modificadoras
+        if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
+
+        // Si la tecla presionada es Enter (final del código de barras)
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            
+            // Si hay un valor, lo procesamos
+            if (scanValue) {
+                status = `Código detectado: ${scanValue}`;
+                onScanSuccess(scanValue);
+                scanValue = ''; // Limpiar el input para el próximo escaneo
+            }
+        }
+    }
+
+    onMount(() => {
+        // Enfocar el campo de escaneo al montar
+        if (scanInput) {
+            scanInput.focus();
+        }
+
+        // Lógica de Tesseract (comentada o pendiente de implementar)
+        // const worker = createWorker({
+        //     logger: m => console.log(m),
+        // });
+        
+        // return () => {
+        //     worker.terminate();
+        // };
+    });
 </script>
 
 <div class="scanner-box">
@@ -80,4 +116,3 @@
         color: #777;
     }
 </style>
-
