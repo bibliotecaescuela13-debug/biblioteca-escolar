@@ -1,7 +1,7 @@
 <h1>Welcome to SvelteKit</h1>
 <p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
 <script lang="ts">
-    import { supabase } from '$lib/utils/supabaseClient';
+    import { hasSupabaseEnv, supabase } from '$lib/utils/supabaseClient';
     import { goto } from '$app/navigation';
 
     let email = '';
@@ -14,6 +14,12 @@
     async function handleAuth() {
         error = null;
         statusMessage = null;
+
+        if (!hasSupabaseEnv) {
+            error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
+            return;
+        }
+
         loading = true;
 
         let authPromise;
@@ -47,6 +53,12 @@
     async function handleGoogleAuth() {
         error = null;
         statusMessage = null;
+
+        if (!hasSupabaseEnv) {
+            error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
+            return;
+        }
+
         loading = true;
 
         const { error: oauthError } = await supabase.auth.signInWithOAuth({
