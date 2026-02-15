@@ -1,58 +1,11 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
 <script lang="ts">
     import { hasSupabaseEnv, supabase } from '$lib/utils/supabaseClient';
-    import { goto } from '$app/navigation';
 
-    let email = '';
-    let password = '';
     let loading = false;
     let error: string | null = null;
-    let statusMessage: string | null = null;
-    let isRegistering = false; // Alterna entre Login y Registro
-
-    async function handleAuth() {
-        error = null;
-        statusMessage = null;
-
-        if (!hasSupabaseEnv) {
-            error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
-            return;
-        }
-
-        loading = true;
-
-        let authPromise;
-        if (isRegistering) {
-            // Intenta el registro Nota Supabase Auth gestiona el envío de emails de confirmación.
-            authPromise = supabase.auth.signUp({
-                email,
-                password,
-            });
-            statusMessage = '¡Registro exitoso! Revisa tu correo electrónico para confirmar tu cuenta.';
-        } else {
-            // Intenta el inicio de sesión
-            authPromise = supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-        }
-
-        const { error: authError, data } = await authPromise;
-
-        if (authError) {
-            error = authError.message;
-        } else if (data.user) {
-            // Si el login fue exitoso, redirige a la página principal de búsqueda
-            goto('/search');
-        }
-        
-        loading = false;
-    }
 
     async function handleGoogleAuth() {
         error = null;
-        statusMessage = null;
 
         if (!hasSupabaseEnv) {
             error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
@@ -76,37 +29,16 @@
 </script>
 
 <div class="auth-container">
-    <h2>{isRegistering ? 'Registrar Usuario' : 'Iniciar Sesión'}</h2>
+    <h1>📚 Biblioteca Escolar</h1>
+    <p class="subtitle">Accede con tu cuenta institucional de Google.</p>
 
-    <form on:submit|preventDefault={handleAuth} class="auth-form">
-        <label for="email">Correo Electrónico</label>
-        <input type="email" bind:value={email} required disabled={loading} placeholder="usuario@escuela.edu">
+    {#if error}
+        <p class="error-message">❌ {error}</p>
+    {/if}
 
-        <label for="password">Contraseña</label>
-        <input type="password" bind:value={password} required disabled={loading} placeholder="••••••••">
-
-        {#if error}
-            <p class="error-message">❌ {error}</p>
-        {/if}
-
-        {#if statusMessage}
-            <p class="status-message">✅ {statusMessage}</p>
-        {/if}
-
-        <button type="submit" disabled={loading} class="auth-btn">
-            {loading ? 'Cargando...' : (isRegistering ? 'Registrarse' : 'Entrar')}
-        </button>
-
-        <button type="button" disabled={loading} class="google-btn" on:click={handleGoogleAuth}>
-            Continuar con Google
-        </button>
-    </form>
-
-    <div class="toggle-mode">
-        <button on:click={() => isRegistering = !isRegistering} class="toggle-btn">
-            {isRegistering ? '¿Ya tienes cuenta? Inicia Sesión' : '¿Necesitas una cuenta? Regístrate'}
-        </button>
-    </div>
+    <button type="button" disabled={loading} class="google-btn" on:click={handleGoogleAuth}>
+        {loading ? 'Redirigiendo…' : 'Continuar con Google'}
+    </button>
 </div>
 
 <style>
@@ -119,38 +51,14 @@
         background-color: #ffffff;
         text-align: center;
     }
-    h2 {
+    h1 {
         color: #00796b;
-        margin-bottom: 30px;
+        margin-bottom: 10px;
+        font-size: 1.8rem;
     }
-    .auth-form label {
-        display: block;
-        text-align: left;
-        margin-bottom: 5px;
-        font-weight: bold;
-        color: #555;
-    }
-    .auth-form input {
-        width: 100%;
-        padding: 12px;
-        margin-bottom: 20px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        box-sizing: border-box;
-    }
-    .auth-btn {
-        width: 100%;
-        padding: 12px;
-        background-color: #4CAF50; /* Verde amigable */
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 1.1rem;
-        transition: background-color 0.3s;
-    }
-    .auth-btn:hover:not(:disabled) {
-        background-color: #45a049;
+    .subtitle {
+        color: #666;
+        margin-bottom: 25px;
     }
     .error-message {
         color: #d32f2f;
@@ -159,18 +67,7 @@
         border-radius: 5px;
         margin-bottom: 15px;
     }
-    .toggle-mode {
-        margin-top: 20px;
-    }
-    .status-message {
-        color: #1b5e20;
-        background-color: #e8f5e9;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 15px;
-    }
     .google-btn {
-        margin-top: 10px;
         width: 100%;
         padding: 12px;
         background-color: #ffffff;
@@ -179,15 +76,14 @@
         border-radius: 5px;
         cursor: pointer;
         font-size: 1rem;
+        font-weight: 600;
+        transition: background-color 0.2s;
     }
     .google-btn:hover:not(:disabled) {
         background-color: #f3f3f3;
     }
-    .toggle-btn {
-        background: none;
-        border: none;
-        color: #00796b;
-        cursor: pointer;
-        text-decoration: underline;
+    .google-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
     }
 </style>
