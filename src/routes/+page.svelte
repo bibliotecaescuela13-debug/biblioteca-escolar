@@ -77,8 +77,13 @@
         cursor: pointer;
         font-size: 1rem;
         font-weight: 600;
+        transition: background-color 0.2s;
     }
     .google-btn:hover:not(:disabled) {
         background-color: #f3f3f3;
+    }
+    .google-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
     }
 </style>
