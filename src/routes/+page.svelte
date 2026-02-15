@@ -8,10 +8,12 @@
     let password = '';
     let loading = false;
     let error: string | null = null;
+    let statusMessage: string | null = null;
     let isRegistering = false; // Alterna entre Login y Registro
 
     async function handleAuth() {
         error = null;
+        statusMessage = null;
         loading = true;
 
         let authPromise;
@@ -41,6 +43,24 @@
         
         loading = false;
     }
+
+    async function handleGoogleAuth() {
+        error = null;
+        statusMessage = null;
+        loading = true;
+
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/search`
+            }
+        });
+
+        if (oauthError) {
+            error = oauthError.message;
+            loading = false;
+        }
+    }
 </script>
 
 <div class="auth-container">
@@ -57,8 +77,16 @@
             <p class="error-message">❌ {error}</p>
         {/if}
 
+        {#if statusMessage}
+            <p class="status-message">✅ {statusMessage}</p>
+        {/if}
+
         <button type="submit" disabled={loading} class="auth-btn">
             {loading ? 'Cargando...' : (isRegistering ? 'Registrarse' : 'Entrar')}
+        </button>
+
+        <button type="button" disabled={loading} class="google-btn" on:click={handleGoogleAuth}>
+            Continuar con Google
         </button>
     </form>
 
@@ -121,6 +149,27 @@
     }
     .toggle-mode {
         margin-top: 20px;
+    }
+    .status-message {
+        color: #1b5e20;
+        background-color: #e8f5e9;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+    .google-btn {
+        margin-top: 10px;
+        width: 100%;
+        padding: 12px;
+        background-color: #ffffff;
+        color: #333;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+    .google-btn:hover:not(:disabled) {
+        background-color: #f3f3f3;
     }
     .toggle-btn {
         background: none;
