@@ -19,7 +19,7 @@
         error = null;
 
         if (!hasSupabaseEnv) {
-            error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
+            error = 'Configura las variables de entorno de Supabase para continuar.';
             return;
         }
 
@@ -88,8 +88,13 @@
         cursor: pointer;
         font-size: 1rem;
         font-weight: 600;
+        transition: background-color 0.2s;
     }
     .google-btn:hover:not(:disabled) {
         background-color: #f3f3f3;
+    }
+    .google-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
     }
 </style>

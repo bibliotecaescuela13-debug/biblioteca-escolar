@@ -11,6 +11,8 @@ export const load: LayoutServerLoad = async () => {
 	// 1. Obtenemos la sesión actual
 	const { data: { session } } = await supabase.auth.getSession();
 
+	// Si no hay sesión, devolvemos todo nulo. 
+	// El archivo /admin/+layout.server.ts usará esto para rebotar a los intrusos.
 	if (!session) {
 		return { session: null, user: null, userDisplayName: null };
 	}
@@ -19,14 +21,14 @@ export const load: LayoutServerLoad = async () => {
 	const authEmail = session.user.email ?? '';
 	const fullNameFromGoogle = (session.user.user_metadata?.full_name as string | undefined)?.trim() ?? null;
 
-	// 2. Intentamos buscar por ID
+	// 2. Intentamos buscar por ID en la tabla usuarios
 	let { data: userData, error } = await supabase
 		.from('usuarios')
 		.select('id, nombre_completo, rol, grado_escolar, avatar_url')
 		.eq('id', authUserId)
 		.maybeSingle();
 
-	// 3. Si no existe por ID, buscamos por el email (que está en nombre_completo) y sincronizamos
+	// 3. Si no existe por ID, buscamos por el email (que suele estar en nombre_completo) y sincronizamos
 	if (!userData) {
 		const { data: legacyUser } = await supabase
 			.from('usuarios')
@@ -35,7 +37,7 @@ export const load: LayoutServerLoad = async () => {
 			.maybeSingle();
 
 		if (legacyUser) {
-			// Sincronizamos el ID de Auth con la fila de la tabla
+			// Sincronizamos el ID de Auth con la fila existente para que en la próxima entre por el paso 2
 			const { data: syncedUser } = await supabase
 				.from('usuarios')
 				.update({ id: authUserId })
@@ -47,7 +49,11 @@ export const load: LayoutServerLoad = async () => {
 		}
 	}
 
-	// 4. "Llave maestra" para el bibliotecario principal
+	if (error) {
+		console.error('Error al cargar datos del usuario:', error);
+	}
+
+	// 4. "Llave maestra" de seguridad para el bibliotecario principal
 	if (authEmail.toLowerCase() === FORCE_BIBLIO_EMAIL) {
 		userData = {
 			...(userData ?? {
@@ -60,7 +66,7 @@ export const load: LayoutServerLoad = async () => {
 		};
 	}
 
-	console.log('DEBUG - Usuario cargado:', userData);
+	console.log('DEBUG - Usuario cargado correctamente:', userData?.email || authEmail);
 
 	return {
 		session,

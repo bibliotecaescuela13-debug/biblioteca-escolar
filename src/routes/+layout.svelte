@@ -5,12 +5,17 @@
 	let { children, data }: { children: any; data: any } = $props();
 
 	const isLoggedIn = Boolean(data?.session);
-	const isBibliotecario = data?.user?.rol?.toLowerCase() === 'bibliotecario';
+	
+	// VALIDACIÓN REFORZADA: Si el rol es bibliotecario O si es tu correo institucional
+	const isBibliotecario = 
+		data?.user?.rol?.toLowerCase() === 'bibliotecario' || 
+		data?.session?.user?.email === 'bibliotecamarianomoreno9@gmail.com';
+
 	const displayName = data?.userDisplayName ?? data?.session?.user?.email ?? 'Usuario';
 
 	async function handleSignOut() {
 		await supabase.auth.signOut();
-		// Usamos window.location para asegurar limpieza total de cookies/sesión
+		// Forzamos recarga total para asegurar que no queden datos en memoria
 		window.location.href = '/';
 	}
 </script>
@@ -92,5 +97,6 @@
 		padding: 4px 12px;
 		border-radius: 999px;
 		margin-right: 5px;
+		color: white;
 	}
 </style>
