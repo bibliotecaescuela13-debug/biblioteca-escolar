@@ -6,17 +6,14 @@
 
     function mapAuthError(message: string) {
         const normalized = message.toLowerCase();
-
         if (
             normalized.includes('unsupported provider') ||
             normalized.includes('provider is not enabled')
         ) {
             return 'Google Auth no está habilitado en Supabase. Actívalo en Authentication > Providers > Google.';
         }
-
         return message;
     }
-
 
     async function handleGoogleAuth() {
         error = null;

@@ -10,7 +10,8 @@
 
 	async function handleSignOut() {
 		await supabase.auth.signOut();
-		goto('/');
+		// Usamos window.location para asegurar limpieza total de cookies/sesión
+		window.location.href = '/';
 	}
 </script>
 
@@ -20,11 +21,15 @@
 
 		{#if !isLoggedIn}
 			<a href="/">Ingresar</a>
-		{:else if isBibliotecario}
+		{:else}
 			<span class="user-chip">👤 {displayName}</span>
-			<a href="/admin/servicios">Impresiones</a>
-			<a href="/admin/prestamos">Préstamos</a>
-			<a href="/admin/usuarios">Usuarios</a>
+			
+			{#if isBibliotecario}
+				<a href="/admin/servicios">Impresiones</a>
+				<a href="/admin/prestamos">Préstamos</a>
+				<a href="/admin/usuarios">Usuarios</a>
+			{/if}
+			
 			<button type="button" onclick={handleSignOut}>Salir</button>
 		{/if}
 	</nav>
@@ -84,7 +89,8 @@
 		font-size: 0.85rem;
 		background: rgba(255, 255, 255, 0.18);
 		border: 1px solid rgba(255, 255, 255, 0.28);
-		padding: 4px 8px;
+		padding: 4px 12px;
 		border-radius: 999px;
+		margin-right: 5px;
 	}
 </style>
