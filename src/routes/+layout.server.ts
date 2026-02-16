@@ -1,8 +1,12 @@
 import type { LayoutServerLoad } from './$types';
-import { supabase } from '$lib/utils/supabaseClient';
+import { hasSupabaseEnv, supabase } from '$lib/utils/supabaseClient';
 
 // Esta función se ejecuta antes de que se cargue cualquier página de la aplicación.
 export const load: LayoutServerLoad = async ({ locals }) => {
+    if (!hasSupabaseEnv) {
+        return { session: null, user: null };
+    }
+
     // Obtenemos la sesión actual del usuario.
     const { data: { session } } = await supabase.auth.getSession();
     
