@@ -4,12 +4,15 @@
 
 	let { children, data } = $props();
 
+	// Usamos .toLowerCase() para que no importe si en la base de datos escribiste 
+	// "Bibliotecario", "bibliotecario" o "BIBLIOTECARIO".
 	const isLoggedIn = Boolean(data?.session);
-	const isBibliotecario = data?.user?.rol === 'Bibliotecario';
+	const isBibliotecario = data?.user?.rol?.toLowerCase() === 'bibliotecario';
 
 	async function handleSignOut() {
 		await supabase.auth.signOut();
-		goto('/');
+		// Forzamos la recarga para limpiar el estado de la sesión
+		window.location.href = '/';
 	}
 </script>
 
@@ -19,10 +22,12 @@
 
 		{#if !isLoggedIn}
 			<a href="/">Ingresar</a>
-		{:else if isBibliotecario}
-			<a href="/admin/servicios">Impresiones</a>
-			<a href="/admin/prestamos">Préstamos</a>
-			<a href="/admin/usuarios">Usuarios</a>
+		{:else}
+			{#if isBibliotecario}
+				<a href="/admin/servicios">Impresiones</a>
+				<a href="/admin/prestamos">Préstamos</a>
+				<a href="/admin/usuarios">Usuarios</a>
+			{/if}
 			<button type="button" onclick={handleSignOut}>Salir</button>
 		{/if}
 	</nav>

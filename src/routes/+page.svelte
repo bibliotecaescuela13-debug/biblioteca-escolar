@@ -17,12 +17,14 @@
 
     async function handleGoogleAuth() {
         error = null;
+
         if (!hasSupabaseEnv) {
             error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
             return;
         }
 
         loading = true;
+
         const { error: oauthError } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
