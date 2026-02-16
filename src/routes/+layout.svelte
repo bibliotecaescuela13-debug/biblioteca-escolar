@@ -5,12 +5,18 @@
 	let { children, data }: { children: any; data: any } = $props();
 
 	const isLoggedIn = Boolean(data?.session);
-	const isBibliotecario = data?.user?.rol?.toLowerCase() === 'bibliotecario' || data?.session?.user?.email === 'bibliotecamarianomoreno9@gmail.com';
+	
+	// VALIDACIÓN REFORZADA: Si el rol es bibliotecario O si es tu correo institucional
+	const isBibliotecario = 
+		data?.user?.rol?.toLowerCase() === 'bibliotecario' || 
+		data?.session?.user?.email === 'bibliotecamarianomoreno9@gmail.com';
+
 	const displayName = data?.userDisplayName ?? data?.session?.user?.email ?? 'Usuario';
 
 	async function handleSignOut() {
 		await supabase.auth.signOut();
-		goto('/');
+		// Forzamos recarga total para asegurar que no queden datos en memoria
+		window.location.href = '/';
 	}
 </script>
 
@@ -20,11 +26,15 @@
 
 		{#if !isLoggedIn}
 			<a href="/">Ingresar</a>
-		{:else if isBibliotecario}
+		{:else}
 			<span class="user-chip">👤 {displayName}</span>
-			<a href="/admin/servicios">Impresiones</a>
-			<a href="/admin/prestamos">Préstamos</a>
-			<a href="/admin/usuarios">Usuarios</a>
+			
+			{#if isBibliotecario}
+				<a href="/admin/servicios">Impresiones</a>
+				<a href="/admin/prestamos">Préstamos</a>
+				<a href="/admin/usuarios">Usuarios</a>
+			{/if}
+			
 			<button type="button" onclick={handleSignOut}>Salir</button>
 		{/if}
 	</nav>
@@ -84,7 +94,9 @@
 		font-size: 0.85rem;
 		background: rgba(255, 255, 255, 0.18);
 		border: 1px solid rgba(255, 255, 255, 0.28);
-		padding: 4px 8px;
+		padding: 4px 12px;
 		border-radius: 999px;
+		margin-right: 5px;
+		color: white;
 	}
 </style>

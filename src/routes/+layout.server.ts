@@ -3,17 +3,16 @@ import { hasSupabaseEnv, supabase } from '$lib/utils/supabaseClient';
 
 const FORCE_BIBLIO_EMAIL = 'bibliotecamarianomoreno9@gmail.com';
 
-// Esta función se ejecuta antes de que se cargue cualquier página de la aplicación.
 export const load: LayoutServerLoad = async () => {
 	if (!hasSupabaseEnv) {
 		return { session: null, user: null, userDisplayName: null };
 	}
 
-	// Obtenemos la sesión actual del usuario.
-	const {
-		data: { session }
-	} = await supabase.auth.getSession();
+	// 1. Obtenemos la sesión actual
+	const { data: { session } } = await supabase.auth.getSession();
 
+	// Si no hay sesión, devolvemos todo nulo. 
+	// El archivo /admin/+layout.server.ts usará esto para rebotar a los intrusos.
 	if (!session) {
 		return { session: null, user: null, userDisplayName: null };
 	}
@@ -22,39 +21,31 @@ export const load: LayoutServerLoad = async () => {
 	const authEmail = session.user.email ?? '';
 	const fullNameFromGoogle = (session.user.user_metadata?.full_name as string | undefined)?.trim() ?? null;
 
-	// 1) Buscar por id (camino principal)
+	// 2. Intentamos buscar por ID en la tabla usuarios
 	let { data: userData, error } = await supabase
 		.from('usuarios')
 		.select('id, nombre_completo, rol, grado_escolar, avatar_url')
 		.eq('id', authUserId)
 		.maybeSingle();
 
-	// 2) Si no existe por id, buscar por nombre_completo (email temporal) y sincronizar id
+	// 3. Si no existe por ID, buscamos por el email (que suele estar en nombre_completo) y sincronizamos
 	if (!userData) {
-		const { data: legacyUser, error: legacyError } = await supabase
+		const { data: legacyUser } = await supabase
 			.from('usuarios')
 			.select('id, nombre_completo, rol, grado_escolar, avatar_url')
 			.eq('nombre_completo', authEmail)
 			.maybeSingle();
 
-		if (legacyError) {
-			console.error('Error al buscar usuario por nombre_completo (sync fallback):', legacyError);
-		}
-
 		if (legacyUser) {
-			const { data: syncedUser, error: syncError } = await supabase
+			// Sincronizamos el ID de Auth con la fila existente para que en la próxima entre por el paso 2
+			const { data: syncedUser } = await supabase
 				.from('usuarios')
 				.update({ id: authUserId })
 				.eq('id', legacyUser.id)
 				.select('id, nombre_completo, rol, grado_escolar, avatar_url')
 				.maybeSingle();
 
-			if (syncError) {
-				console.error('Error al sincronizar id de usuario:', syncError);
-				userData = legacyUser;
-			} else {
-				userData = syncedUser ?? legacyUser;
-			}
+			userData = syncedUser ?? legacyUser;
 		}
 	}
 
@@ -62,7 +53,7 @@ export const load: LayoutServerLoad = async () => {
 		console.error('Error al cargar datos del usuario:', error);
 	}
 
-	// 3) Fallback defensivo para no bloquear acceso del usuario bibliotecario principal
+	// 4. "Llave maestra" de seguridad para el bibliotecario principal
 	if (authEmail.toLowerCase() === FORCE_BIBLIO_EMAIL) {
 		userData = {
 			...(userData ?? {
@@ -75,7 +66,7 @@ export const load: LayoutServerLoad = async () => {
 		};
 	}
 
-	console.log('Usuario actual:', userData);
+	console.log('DEBUG - Usuario cargado correctamente:', userData?.email || authEmail);
 
 	return {
 		session,
