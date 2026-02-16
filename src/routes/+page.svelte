@@ -6,28 +6,23 @@
 
     function mapAuthError(message: string) {
         const normalized = message.toLowerCase();
-
         if (
             normalized.includes('unsupported provider') ||
             normalized.includes('provider is not enabled')
         ) {
             return 'Google Auth no está habilitado en Supabase. Actívalo en Authentication > Providers > Google.';
         }
-
         return message;
     }
 
-
     async function handleGoogleAuth() {
         error = null;
-
         if (!hasSupabaseEnv) {
             error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
             return;
         }
 
         loading = true;
-
         const { error: oauthError } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
