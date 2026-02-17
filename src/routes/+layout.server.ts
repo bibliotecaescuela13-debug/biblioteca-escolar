@@ -26,7 +26,7 @@ export const load: LayoutServerLoad = async () => {
 		.eq('id', authUserId)
 		.maybeSingle();
 
-	// 3. Si no existe por ID, buscamos por email (en nombre_completo) para sincronizar cuentas viejas
+	// 3. Si no existe por ID, buscamos por email para sincronizar cuentas viejas
 	if (!userData) {
 		const { data: legacyUser } = await supabase
 			.from('usuarios')
@@ -50,7 +50,7 @@ export const load: LayoutServerLoad = async () => {
 		console.error('Error al cargar datos del usuario:', error);
 	}
 
-	// 4. APLICAMOS LA LLAVE MAESTRA: Si es tu email, sos Bibliotecario sí o sí
+	// 4. LLAVE MAESTRA: Si es tu email, forzamos el rol de Bibliotecario
 	if (authEmail === OWNER_EMAIL) {
 		userData = {
 			...(userData ?? {
