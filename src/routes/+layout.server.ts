@@ -1,24 +1,22 @@
 import type { LayoutServerLoad } from './$types';
 import { hasSupabaseEnv, supabase } from '$lib/utils/supabaseClient';
 
-const FORCE_BIBLIO_EMAIL = 'bibliotecamarianomoreno9@gmail.com';
+const OWNER_EMAIL = 'bibliotecamarianomoreno9@gmail.com';
 
 export const load: LayoutServerLoad = async () => {
 	if (!hasSupabaseEnv) {
 		return { session: null, user: null, userDisplayName: null };
 	}
 
-	// 1. Obtenemos la sesión actual
+	// 1. Obtenemos la sesión actual de Supabase
 	const { data: { session } } = await supabase.auth.getSession();
 
-	// Si no hay sesión, devolvemos todo nulo. 
-	// El archivo /admin/+layout.server.ts usará esto para rebotar a los intrusos.
 	if (!session) {
 		return { session: null, user: null, userDisplayName: null };
 	}
 
 	const authUserId = session.user.id;
-	const authEmail = session.user.email ?? '';
+	const authEmail = (session.user.email ?? '').toLowerCase();
 	const fullNameFromGoogle = (session.user.user_metadata?.full_name as string | undefined)?.trim() ?? null;
 
 	// 2. Intentamos buscar por ID en la tabla usuarios
@@ -28,7 +26,7 @@ export const load: LayoutServerLoad = async () => {
 		.eq('id', authUserId)
 		.maybeSingle();
 
-	// 3. Si no existe por ID, buscamos por el email (que suele estar en nombre_completo) y sincronizamos
+	// 3. Si no existe por ID, buscamos por email (en nombre_completo) para sincronizar cuentas viejas
 	if (!userData) {
 		const { data: legacyUser } = await supabase
 			.from('usuarios')
@@ -37,7 +35,6 @@ export const load: LayoutServerLoad = async () => {
 			.maybeSingle();
 
 		if (legacyUser) {
-			// Sincronizamos el ID de Auth con la fila existente para que en la próxima entre por el paso 2
 			const { data: syncedUser } = await supabase
 				.from('usuarios')
 				.update({ id: authUserId })
@@ -53,8 +50,8 @@ export const load: LayoutServerLoad = async () => {
 		console.error('Error al cargar datos del usuario:', error);
 	}
 
-	// 4. "Llave maestra" de seguridad para el bibliotecario principal
-	if (authEmail.toLowerCase() === FORCE_BIBLIO_EMAIL) {
+	// 4. APLICAMOS LA LLAVE MAESTRA: Si es tu email, sos Bibliotecario sí o sí
+	if (authEmail === OWNER_EMAIL) {
 		userData = {
 			...(userData ?? {
 				id: authUserId,
@@ -65,8 +62,6 @@ export const load: LayoutServerLoad = async () => {
 			rol: 'Bibliotecario'
 		};
 	}
-
-	console.log('DEBUG - Usuario cargado correctamente:', userData?.email || authEmail);
 
 	return {
 		session,

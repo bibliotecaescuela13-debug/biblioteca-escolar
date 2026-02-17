@@ -6,7 +6,7 @@
 
 	const isLoggedIn = Boolean(data?.session);
 	
-	// VALIDACIÓN REFORZADA: Si el rol es bibliotecario O si es tu correo institucional
+	// VALIDACIÓN REFORZADA: Priorizamos el email institucional como "llave maestra"
 	const isBibliotecario = 
 		data?.user?.rol?.toLowerCase() === 'bibliotecario' || 
 		data?.session?.user?.email === 'bibliotecamarianomoreno9@gmail.com';
@@ -15,7 +15,7 @@
 
 	async function handleSignOut() {
 		await supabase.auth.signOut();
-		// Forzamos recarga total para asegurar que no queden datos en memoria
+		// Usamos window.location para limpiar caché y asegurar redirección limpia
 		window.location.href = '/';
 	}
 </script>
