@@ -1,29 +1,44 @@
 import type { LayoutServerLoad } from './$types';
-import { supabase } from '$lib/utils/supabaseClient';
+import { hasSupabaseEnv, supabase } from '$lib/utils/supabaseClient';
 
-// Esta función se ejecuta antes de que se cargue cualquier página de la aplicación.
-export const load: LayoutServerLoad = async ({ locals }) => {
-    // Obtenemos la sesión actual del usuario.
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    // Si hay una sesión, podemos cargar más datos del usuario desde la tabla 'usuarios'
-    if (session) {
-        const { data: userData, error } = await supabase
-            .from('usuarios')
-            .select('id, nombre_completo, rol, grado_escolar, avatar_url')
-            .eq('id', session.user.id)
-            .single();
+const OWNER_EMAIL = 'bibliotecamarianomoreno9@gmail.com';
 
-        if (error) {
-             console.error('Error al cargar datos del usuario:', error);
-             return { session, user: null }; // Devuelve solo la sesión si hay error
-        }
+export const load: LayoutServerLoad = async () => {
+	if (!hasSupabaseEnv) {
+		return { session: null, user: null };
+	}
 
-        return { 
-            session, // Datos de la sesión de Supabase Auth
-            user: userData // Datos del perfil de nuestra tabla 'usuarios' (incluyendo el rol)
-        };
-    }
+	const {
+		data: { session }
+	} = await supabase.auth.getSession();
 
-    return { session: null, user: null };
+	if (!session) {
+		return { session: null, user: null };
+	}
+
+	const { data: userData, error } = await supabase
+		.from('usuarios')
+		.select('id, nombre_completo, rol, grado_escolar, avatar_url')
+		.eq('id', session.user.id)
+		.maybeSingle();
+
+	if (error) {
+		console.error('Error al cargar datos del usuario:', error);
+	}
+
+	const email = (session.user.email ?? '').toLowerCase();
+	const forcedRol = email === OWNER_EMAIL ? 'Bibliotecario' : userData?.rol ?? null;
+
+	const user = {
+		id: userData?.id ?? session.user.id,
+		nombre_completo: userData?.nombre_completo ?? session.user.user_metadata?.full_name ?? session.user.email ?? 'Usuario',
+		rol: forcedRol,
+		grado_escolar: userData?.grado_escolar ?? null,
+		avatar_url: userData?.avatar_url ?? null
+	};
+
+	return {
+		session,
+		user
+	};
 };
