@@ -1,25 +1,32 @@
-import { redirect, type Handle } from '@sveltejs/kit';
-
-const OWNER_EMAIL = 'bibliotecamarianomoreno9@gmail.com';
+import { createServerClient } from '@supabase/ssr';
+import { type Handle, redirect } from '@sveltejs/kit';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const path = event.url.pathname;
+  event.locals.supabase = createServerClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get: (key) => event.cookies.get(key),
+        set: (key, value, options) => event.cookies.set(key, value, { ...options, path: '/' }),
+        remove: (key, options) => event.cookies.delete(key, { ...options, path: '/' }),
+      },
+    }
+  );
 
-	// Si intentamos entrar a cualquier cosa de /admin
-	if (path.startsWith('/admin')) {
-		// Intentamos obtener la sesión de los datos que Supabase ya inyectó en locals
-		// Si locals.session no existe, probamos con locals.safeGetSession
-		const sessionData = await (event.locals as any).safeGetSession?.() || { session: (event.locals as any).session };
-		const session = sessionData.session;
-		
-		const email = session?.user?.email?.toLowerCase();
+  event.locals.safeGetSession = async () => {
+    const { data: { session } } = await event.locals.supabase.auth.getSession();
+    return { session, user: session?.user ?? null };
+  };
 
-		// BLOQUEO SEGURIDAD: Si no estás logueado o el mail no es el tuyo, al inicio.
-		if (!session || email !== OWNER_EMAIL) {
-			console.log('Acceso denegado a:', email);
-			throw redirect(303, '/');
-		}
-	}
+  const { session } = await event.locals.safeGetSession();
 
-	return resolve(event);
+  // Bloqueo total: Si no eres tú, no entras a /admin
+  if (event.url.pathname.startsWith('/admin')) {
+    if (!session || session.user.email !== 'bibliotecamarianomoreno9@gmail.com') {
+      throw redirect(303, '/');
+    }
+  }
+
+  return resolve(event);
 };
