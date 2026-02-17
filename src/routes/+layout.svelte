@@ -5,11 +5,18 @@
 	let { children, data }: { children: any; data: any } = $props();
 
 	const isLoggedIn = Boolean(data?.session);
-	const isBibliotecario = data?.user?.rol === 'Bibliotecario';
+	
+	// VALIDACIÓN REFORZADA: Priorizamos el email institucional como "llave maestra"
+	const isBibliotecario = 
+		data?.user?.rol?.toLowerCase() === 'bibliotecario' || 
+		data?.session?.user?.email === 'bibliotecamarianomoreno9@gmail.com';
+
+	const displayName = data?.userDisplayName ?? data?.session?.user?.email ?? 'Usuario';
 
 	async function handleSignOut() {
 		await supabase.auth.signOut();
-		goto('/');
+		// Usamos window.location para limpiar caché y asegurar redirección limpia
+		window.location.href = '/';
 	}
 </script>
 
@@ -20,11 +27,14 @@
 		{#if !isLoggedIn}
 			<a href="/">Ingresar</a>
 		{:else}
+			<span class="user-chip">👤 {displayName}</span>
+			
 			{#if isBibliotecario}
 				<a href="/admin/servicios">Impresiones</a>
 				<a href="/admin/prestamos">Préstamos</a>
 				<a href="/admin/usuarios">Usuarios</a>
 			{/if}
+			
 			<button type="button" onclick={handleSignOut}>Salir</button>
 		{/if}
 	</nav>
@@ -78,5 +88,15 @@
 	nav a:hover,
 	nav button:hover {
 		color: #ffc107;
+	}
+
+	.user-chip {
+		font-size: 0.85rem;
+		background: rgba(255, 255, 255, 0.18);
+		border: 1px solid rgba(255, 255, 255, 0.28);
+		padding: 4px 12px;
+		border-radius: 999px;
+		margin-right: 5px;
+		color: white;
 	}
 </style>
