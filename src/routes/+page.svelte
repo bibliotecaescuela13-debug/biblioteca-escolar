@@ -6,20 +6,23 @@
 
     function mapAuthError(message: string) {
         const normalized = message.toLowerCase();
+
         if (
             normalized.includes('unsupported provider') ||
             normalized.includes('provider is not enabled')
         ) {
             return 'Google Auth no está habilitado en Supabase. Actívalo en Authentication > Providers > Google.';
         }
+
         return message;
     }
+
 
     async function handleGoogleAuth() {
         error = null;
 
         if (!hasSupabaseEnv) {
-            error = 'Configura las variables de entorno de Supabase para continuar.';
+            error = 'Configura VITE_PUBLIC_SUPABASE_URL y VITE_PUBLIC_SUPABASE_ANON_KEY para continuar.';
             return;
         }
 
@@ -88,13 +91,8 @@
         cursor: pointer;
         font-size: 1rem;
         font-weight: 600;
-        transition: background-color 0.2s;
     }
     .google-btn:hover:not(:disabled) {
         background-color: #f3f3f3;
-    }
-    .google-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
     }
 </style>
