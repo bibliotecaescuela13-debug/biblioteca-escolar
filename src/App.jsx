@@ -398,11 +398,66 @@ function AccessDenied({ onLogout }) {
 
 function Footer() {
   return (
-    <footer className="bg-gradient-to-r from-amber-900 via-orange-900 to-red-900 text-amber-100 mt-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <p className="font-bold text-lg">Biblioteca Mariano Moreno — Escuela N° 13 "Blanco Encalada"</p>
-        <p className="text-amber-200 text-sm">Eva Perón 651, General Ramírez, Entre Ríos</p>
-        <p className="text-amber-300 text-xs mt-2">© {new Date().getFullYear()} Comunidad Educativa de la Escuela N° 13</p>
+    <footer className="bg-gradient-to-r from-amber-900 via-orange-900 to-red-900 text-amber-100 mt-8 border-t-4 border-orange-600">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+          
+          {/* SECCIÓN INSTITUCIONAL */}
+          <div className="text-center md:text-left order-2 md:order-1">
+            <h4 className="font-bold text-lg tracking-tight text-white">
+              Biblioteca Mariano Moreno
+            </h4>
+            <p className="text-amber-200 text-sm opacity-90">
+              Escuela N° 13 "Blanco Encalada"
+            </p>
+            <p className="text-amber-400/70 text-xs mt-1">
+              General Ramírez, Entre Ríos
+            </p>
+          </div>
+
+          {/* SECCIÓN LOGO CONCEPTUAL (WOC/WOK) */}
+          <div className="flex flex-col items-center order-1 md:order-2">
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-orange-600 to-amber-400 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000"></div>
+              <div className="relative bg-amber-950 px-5 py-2 rounded-full border border-amber-800/50 flex items-center gap-3">
+                <span className="text-xl font-black tracking-tighter text-white">WOC</span>
+                <div className="w-px h-4 bg-orange-500/50"></div>
+                <span className="text-xl font-light italic tracking-widest text-orange-400">WOK</span>
+              </div>
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-orange-500 font-bold mt-3">
+              Code & Kitchen
+            </p>
+          </div>
+
+          {/* SECCIÓN MARCA PERSONAL */}
+          <div className="text-center md:text-right order-3">
+            <p className="text-xs uppercase tracking-widest text-amber-500 font-bold mb-1">
+              Desarrollado por
+            </p>
+            <a 
+              href="https://github.com/wox9000" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="group inline-flex flex-col items-center md:items-end"
+            >
+              <span className="text-white group-hover:text-orange-400 transition-colors font-black text-xl tracking-tight">
+                Walter OC
+              </span>
+              <span className="text-orange-500 font-medium text-sm italic -mt-1">
+                Software a Punto
+              </span>
+            </a>
+          </div>
+
+        </div>
+
+        {/* LÍNEA DE CIERRE */}
+        <div className="mt-8 pt-6 border-t border-amber-800/30 text-center">
+          <p className="text-amber-500/40 text-[10px] uppercase tracking-widest font-medium">
+            © {new Date().getFullYear()} — Calidad artesanal en cada línea de código
+          </p>
+        </div>
       </div>
     </footer>
   );
