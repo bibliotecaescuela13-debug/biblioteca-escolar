@@ -1,9 +1,45 @@
 import { createClient } from '@supabase/supabase-js'
 
-// IMPORTANTE: Reemplaza estas variables con tus credenciales de Supabase
-// Las encontrarás en: https://app.supabase.com/project/YOUR_PROJECT/settings/api
+const runtimeEnv = import.meta.env || {}
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
+const rawSupabaseUrl =
+  runtimeEnv.VITE_SUPABASE_URL ||
+  runtimeEnv.NEXT_PUBLIC_SUPABASE_URL ||
+  ''
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+const rawSupabaseAnonKey =
+  runtimeEnv.VITE_SUPABASE_ANON_KEY ||
+  runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  ''
+
+const isValidHttpUrl = (value) => {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+const hasValidSupabaseUrl = isValidHttpUrl(rawSupabaseUrl)
+
+export const isSupabaseConfigured = Boolean(
+  hasValidSupabaseUrl && rawSupabaseAnonKey
+)
+
+const fallbackUrl = 'https://example.supabase.co'
+const fallbackAnonKey = 'public-anon-key'
+
+let supabaseClient
+
+try {
+  supabaseClient = createClient(
+    isSupabaseConfigured ? rawSupabaseUrl : fallbackUrl,
+    isSupabaseConfigured ? rawSupabaseAnonKey : fallbackAnonKey
+  )
+} catch (error) {
+  console.warn('[supabase] configuración inválida, usando cliente de fallback.', error)
+  supabaseClient = createClient(fallbackUrl, fallbackAnonKey)
+}
+
+export const supabase = supabaseClient
