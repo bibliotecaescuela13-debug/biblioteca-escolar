@@ -1,891 +1,951 @@
-import React, { useState, useEffect } from 'react';
-import { BookOpen, Printer, Video, Sparkles, Users, BarChart3, Upload, Download, Calendar, TrendingUp, FileText, Search, Plus, X } from 'lucide-react';
-import { supabase } from './lib/supabase';
-import { exportToCSV, parseCSV, downloadExcelTemplate } from './lib/exportUtils';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  BarChart3,
+  BookOpen,
+  Download,
+  Library,
+  LogIn,
+  LogOut,
+  Pencil,
+  Plus,
+  Printer,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+  Users,
+  Video,
+  X,
+} from 'lucide-react';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { downloadExcelTemplate, exportToCSV, parseCSV } from './lib/exportUtils';
+
+const ADMIN_EMAIL = 'bibliotecamarianomoreno9@gmail.com';
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState('dashboard');
+  const [activeModule, setActiveModule] = useState('opac');
   const [loading, setLoading] = useState(true);
-  
-  // Data states
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isStudent, setIsStudent] = useState(false); // preparado para próximas vistas alumno
+
+  const [session, setSession] = useState(null);
+  const [libros, setLibros] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [serviciosImpresion, setServiciosImpresion] = useState([]);
   const [serviciosVideo, setServiciosVideo] = useState([]);
   const [actividadesLectura, setActividadesLectura] = useState([]);
 
+  const [confirmState, setConfirmState] = useState(null);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (type, message) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3200);
+  };
+
+  const toastSuccess = (message) => addToast('success', message);
+  const toastError = (message) => addToast('error', message);
+
+  const confirmAction = ({ title, text, confirmText = 'Confirmar', cancelText = 'Cancelar' }) =>
+    new Promise((resolve) => {
+      setConfirmState({ title, text, confirmText, cancelText, resolve });
+    });
+
+  const resolveConfirm = (value) => {
+    if (confirmState?.resolve) confirmState.resolve(value);
+    setConfirmState(null);
+  };
+
   useEffect(() => {
-    loadAllData();
+    loadPublicData();
   }, []);
 
-  const loadAllData = async () => {
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setAuthLoading(false);
+      return;
+    }
+
+    const initializeAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      handleSession(data.session);
+      setAuthLoading(false);
+    };
+
+    initializeAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      handleSession(nextSession);
+      setAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) loadAdminData();
+  }, [isAdmin]);
+
+  const handleSession = async (currentSession) => {
+    setSession(currentSession);
+    const email = currentSession?.user?.email?.toLowerCase() || '';
+
+    if (!email) {
+      setIsAdmin(false);
+      setIsStudent(false);
+      return;
+    }
+
+    if (email === ADMIN_EMAIL) {
+      setIsAdmin(true);
+      setIsStudent(false);
+      return;
+    }
+
+    // futura extensión para estudiantes
+    setIsAdmin(false);
+    setIsStudent(true);
+  };
+
+  const loadPublicData = async () => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const [usersRes, printRes, videoRes, readingRes] = await Promise.all([
+      const { data, error } = await supabase.from('libros').select('*').order('titulo');
+      if (error) throw error;
+      setLibros(data || []);
+    } catch (error) {
+      toastError(`Error cargando catálogo: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAdminData = async () => {
+    try {
+      const [usersRes, printRes, videoRes, readingRes, booksRes] = await Promise.all([
         supabase.from('usuarios').select('*').order('nombre'),
         supabase.from('servicios_impresion').select('*').order('created_at', { ascending: false }),
         supabase.from('servicios_video').select('*').order('created_at', { ascending: false }),
-        supabase.from('actividades_lectura').select('*').order('fecha', { ascending: false })
+        supabase.from('actividades_lectura').select('*').order('fecha', { ascending: false }),
+        supabase.from('libros').select('*').order('titulo'),
       ]);
 
-      if (usersRes.data) setUsuarios(usersRes.data);
-      if (printRes.data) setServiciosImpresion(printRes.data);
-      if (videoRes.data) setServiciosVideo(videoRes.data);
-      if (readingRes.data) setActividadesLectura(readingRes.data);
+      if (usersRes.error) throw usersRes.error;
+      if (printRes.error) throw printRes.error;
+      if (videoRes.error) throw videoRes.error;
+      if (readingRes.error) throw readingRes.error;
+      if (booksRes.error) throw booksRes.error;
+
+      setUsuarios(usersRes.data || []);
+      setServiciosImpresion(printRes.data || []);
+      setServiciosVideo(videoRes.data || []);
+      setActividadesLectura(readingRes.data || []);
+      setLibros(booksRes.data || []);
     } catch (error) {
-      console.error('Error loading data:', error);
+      toastError(`Error cargando panel admin: ${error.message}`);
     }
-    setLoading(false);
   };
 
-  if (loading) {
+  const loginWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+
+    if (error) toastError(error.message);
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setActiveModule('opac');
+    toastSuccess('Sesión cerrada correctamente.');
+  };
+
+  const adminNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'usuarios', label: 'Usuarios', icon: Users },
+    { id: 'impresion', label: 'Impresión', icon: Printer },
+    { id: 'video', label: 'Sala Video', icon: Video },
+    { id: 'lectura', label: 'Lectura', icon: Sparkles },
+    { id: 'catalogacion', label: 'Catalogación', icon: Library },
+  ];
+
+  if (loading || authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-xl text-amber-900 font-semibold">Cargando biblioteca...</p>
-        </div>
-      </div>
+      <LoadingScreen />
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
-      {/* Header */}
       <header className="bg-gradient-to-r from-amber-800 via-orange-800 to-red-800 text-white shadow-2xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-amber-100 p-2.5 rounded-xl rotate-3 shadow-lg">
-                <BookOpen className="w-7 h-7 text-amber-900" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                  Biblioteca Escolar
-                </h1>
-                <p className="text-amber-200 text-xs sm:text-sm">Gestión de servicios</p>
-              </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-amber-100 p-2.5 rounded-xl rotate-3 shadow-lg">
+              <BookOpen className="w-7 h-7 text-amber-900" />
             </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Biblioteca Escolar</h1>
+              <p className="text-amber-200 text-xs sm:text-sm">OPAC Público + Gestión Privada</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveModule('opac')}
+              className="text-sm bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg font-semibold transition-all"
+            >
+              Catálogo OPAC
+            </button>
+
+            {!session && (
+              <button
+                onClick={loginWithGoogle}
+                className="text-sm bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2"
+              >
+                <LogIn className="w-4 h-4" />
+                Acceso Bibliotecario
+              </button>
+            )}
+
+            {session && (
+              <button
+                onClick={logout}
+                className="text-sm bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Cerrar sesión
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-lg border-b-4 border-amber-400 sticky top-[72px] z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex gap-1 py-2 overflow-x-auto">
-            {[
-              { id: 'dashboard', label: 'Panel', icon: BarChart3 },
-              { id: 'impresion', label: 'Impresión', icon: Printer },
-              { id: 'video', label: 'Sala Video', icon: Video },
-              { id: 'lectura', label: 'Lectura', icon: Sparkles },
-              { id: 'usuarios', label: 'Usuarios', icon: Users },
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveModule(id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all font-semibold whitespace-nowrap ${
-                  activeModule === id
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:bg-amber-100 hover:text-amber-900'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            ))}
-          </div>
+      {!isSupabaseConfigured && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <WarningBanner text="Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env para habilitar autenticación y persistencia." />
         </div>
-      </nav>
+      )}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {activeModule === 'dashboard' && (
-          <Dashboard 
+      {session && !isAdmin && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+          <AccessDenied onLogout={logout} />
+        </div>
+      )}
+
+      {isAdmin && (
+        <nav className="bg-white shadow-lg border-b-4 border-amber-400 sticky top-[80px] z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+            <div className="flex gap-1 py-2 overflow-x-auto">
+              {adminNavItems.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveModule(id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all font-semibold whitespace-nowrap ${
+                    activeModule === id
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg transform scale-105'
+                      : 'text-gray-600 hover:bg-amber-100 hover:text-amber-900'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </nav>
+      )}
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {activeModule === 'opac' && <ModuloOPAC libros={libros} />}
+
+        {isAdmin && activeModule === 'dashboard' && (
+          <Dashboard
             usuarios={usuarios}
             serviciosImpresion={serviciosImpresion}
             serviciosVideo={serviciosVideo}
             actividadesLectura={actividadesLectura}
+            libros={libros}
           />
         )}
-        {activeModule === 'impresion' && (
-          <ModuloImpresion 
+
+        {isAdmin && activeModule === 'catalogacion' && (
+          <ModuloCatalogacion
+            libros={libros}
+            onReload={loadAdminData}
+            toastSuccess={toastSuccess}
+            toastError={toastError}
+            confirmAction={confirmAction}
+          />
+        )}
+
+        {isAdmin && activeModule === 'usuarios' && (
+          <ModuloUsuarios
+            usuarios={usuarios}
+            onReload={loadAdminData}
+            toastSuccess={toastSuccess}
+            toastError={toastError}
+            confirmAction={confirmAction}
+          />
+        )}
+
+        {isAdmin && activeModule === 'impresion' && (
+          <ModuloImpresion
             usuarios={usuarios}
             servicios={serviciosImpresion}
-            onReload={loadAllData}
+            onReload={loadAdminData}
+            toastSuccess={toastSuccess}
+            toastError={toastError}
+            confirmAction={confirmAction}
           />
         )}
-        {activeModule === 'video' && (
-          <ModuloVideo 
+
+        {isAdmin && activeModule === 'video' && (
+          <ModuloVideo
             usuarios={usuarios}
             servicios={serviciosVideo}
-            onReload={loadAllData}
+            onReload={loadAdminData}
+            toastSuccess={toastSuccess}
+            toastError={toastError}
+            confirmAction={confirmAction}
           />
         )}
-        {activeModule === 'lectura' && (
-          <ModuloLectura 
-            usuarios={usuarios}
+
+        {isAdmin && activeModule === 'lectura' && (
+          <ModuloLectura
             actividades={actividadesLectura}
-            onReload={loadAllData}
+            onReload={loadAdminData}
+            toastSuccess={toastSuccess}
+            toastError={toastError}
+            confirmAction={confirmAction}
           />
         )}
-        {activeModule === 'usuarios' && (
-          <ModuloUsuarios 
-            usuarios={usuarios}
-            onReload={loadAllData}
-          />
+
+        {isStudent && !isAdmin && (
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-amber-400 text-amber-900">
+            Próximamente: vista de estudiante con préstamos y deudas personales.
+          </div>
         )}
       </main>
+
+      <ConfirmModal state={confirmState} onResolve={resolveConfirm} />
+      <ToastViewport toasts={toasts} />
     </div>
   );
 }
 
-// ==================== DASHBOARD ====================
-function Dashboard({ usuarios, serviciosImpresion, serviciosVideo, actividadesLectura }) {
-  const today = new Date();
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
-  
-  const thisWeekPrint = serviciosImpresion.filter(s => new Date(s.fecha) >= startOfWeek);
-  const thisWeekVideo = serviciosVideo.filter(s => new Date(s.fecha) >= startOfWeek);
-  const todayPrint = serviciosImpresion.filter(s => new Date(s.fecha).toDateString() === today.toDateString());
-  const todayVideo = serviciosVideo.filter(s => new Date(s.fecha).toDateString() === today.toDateString());
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-xl text-amber-900 font-semibold">Cargando biblioteca...</p>
+      </div>
+    </div>
+  );
+}
 
-  const stats = {
-    totalUsuarios: usuarios.length,
-    impresionHoy: todayPrint.length,
-    impresionSemana: thisWeekPrint.length,
-    videoHoy: todayVideo.length,
-    videoSemana: thisWeekVideo.length,
-    totalImpresiones: serviciosImpresion.reduce((sum, s) => sum + s.cantidad_copias, 0),
-  };
+function WarningBanner({ text }) {
+  return (
+    <div className="bg-amber-100 border border-amber-300 text-amber-900 rounded-xl px-4 py-3 font-medium flex items-start gap-2">
+      <AlertTriangle className="w-5 h-5 mt-0.5" />
+      <span>{text}</span>
+    </div>
+  );
+}
 
-  const handleExportAll = () => {
-    const allData = serviciosImpresion.map(s => ({
-      Fecha: s.fecha,
-      Hora: s.hora,
-      Usuario: s.usuario_nombre,
-      Servicio: 'Impresión',
-      Detalles: `${s.cantidad_copias} copias ${s.tipo_impresion}`,
-      Costo: s.costo || '-'
-    })).concat(serviciosVideo.map(s => ({
-      Fecha: s.fecha,
-      Hora: s.hora_inicio,
-      Usuario: s.usuario_nombre,
-      Servicio: 'Sala de Video',
-      Detalles: s.proposito,
-      Costo: '-'
-    })));
+function AccessDenied({ onLogout }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-red-500">
+      <h2 className="text-2xl font-bold text-red-700 mb-2">Acceso Denegado</h2>
+      <p className="text-gray-700 mb-4">Esta cuenta no está autorizada para el panel administrativo.</p>
+      <button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold">
+        Cerrar sesión
+      </button>
+    </div>
+  );
+}
 
-    exportToCSV(allData, `biblioteca-servicios-${new Date().toISOString().split('T')[0]}`);
-  };
+function ModuloOPAC({ libros }) {
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    const term = query.toLowerCase().trim();
+    if (!term) return libros;
+    return libros.filter((l) => (l.titulo || '').toLowerCase().includes(term) || (l.autor || '').toLowerCase().includes(term));
+  }, [libros, query]);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Total Usuarios" value={stats.totalUsuarios} color="from-blue-500 to-blue-700" />
-        <StatCard icon={Printer} label="Impresiones Hoy" value={stats.impresionHoy} color="from-purple-500 to-purple-700" />
-        <StatCard icon={Video} label="Video Hoy" value={stats.videoHoy} color="from-orange-500 to-orange-700" />
-        <StatCard icon={TrendingUp} label="Total Copias" value={stats.totalImpresiones} color="from-green-500 to-green-700" />
-      </div>
-
-      {/* Weekly Overview */}
+    <section className="space-y-5">
       <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-amber-500">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-amber-600" />
-            Esta Semana
-          </h2>
-          <button
-            onClick={handleExportAll}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all font-semibold"
-          >
-            <Download className="w-4 h-4" />
-            Exportar Todo
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-purple-50 rounded-xl border-l-4 border-purple-500">
-            <p className="text-purple-700 font-semibold mb-1">Impresiones esta semana</p>
-            <p className="text-3xl font-bold text-purple-900">{stats.impresionSemana}</p>
-          </div>
-          <div className="p-4 bg-orange-50 rounded-xl border-l-4 border-orange-500">
-            <p className="text-orange-700 font-semibold mb-1">Usos de Sala Video</p>
-            <p className="text-3xl font-bold text-orange-900">{stats.videoSemana}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-orange-500">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <FileText className="w-6 h-6 text-orange-600" />
-          Actividad Reciente
+        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3 mb-4">
+          <Library className="w-8 h-8 text-amber-600" />
+          OPAC - Catálogo Público
         </h2>
-        <div className="space-y-2">
-          {serviciosImpresion.slice(0, 5).map((s, idx) => (
-            <div key={idx} className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Printer className="w-5 h-5 text-purple-600" />
-                <div>
-                  <p className="font-semibold text-gray-800">{s.usuario_nombre}</p>
-                  <p className="text-sm text-gray-600">{s.cantidad_copias} copias - {s.tipo_impresion}</p>
-                </div>
+        <div className="relative">
+          <Search className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por título o autor"
+            className="w-full border-2 border-amber-200 rounded-xl py-2.5 pl-10 pr-4 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filtered.map((l) => {
+          const disponible = (l.cantidad_disponible ?? 0) > 0;
+          return (
+            <article key={l.id} className="bg-white rounded-xl shadow-lg p-5 border-l-4 border-orange-500">
+              <h3 className="font-bold text-lg text-gray-800">{l.titulo}</h3>
+              <p className="text-gray-600">{l.autor || 'Autor no especificado'}</p>
+              <div className="mt-3 text-sm text-gray-600 space-y-1">
+                <p><span className="font-semibold">ISBN:</span> {l.isbn || '—'}</p>
+                <p><span className="font-semibold">Categoría:</span> {l.categoria || '—'}</p>
+                <p><span className="font-semibold">Ubicación:</span> {l.ubicacion || '—'}</p>
               </div>
-              <span className="text-sm text-gray-500">{new Date(s.fecha).toLocaleDateString('es')}</span>
-            </div>
-          ))}
-        </div>
+              <span className={`mt-4 inline-flex px-3 py-1 rounded-full text-xs font-semibold ${disponible ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {disponible ? 'Disponible' : 'Prestado'}
+              </span>
+            </article>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }) {
+function Dashboard({ usuarios, serviciosImpresion, serviciosVideo, actividadesLectura, libros }) {
+  const stats = [
+    { icon: Users, label: 'Usuarios', value: usuarios.length, color: 'from-blue-500 to-blue-700' },
+    { icon: Printer, label: 'Impresiones', value: serviciosImpresion.length, color: 'from-purple-500 to-purple-700' },
+    { icon: Video, label: 'Video', value: serviciosVideo.length, color: 'from-orange-500 to-orange-700' },
+    { icon: Sparkles, label: 'Lectura', value: actividadesLectura.length, color: 'from-green-500 to-green-700' },
+    { icon: Library, label: 'Libros', value: libros.length, color: 'from-amber-500 to-red-600' },
+  ];
+
   return (
-    <div className={`bg-gradient-to-br ${color} rounded-xl shadow-lg p-5 text-white transform hover:scale-105 transition-all`}>
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-white/80 text-sm font-semibold uppercase tracking-wide mb-1">{label}</p>
-          <p className="text-4xl font-bold">{value}</p>
+    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {stats.map((s) => (
+        <div key={s.label} className={`bg-gradient-to-br ${s.color} rounded-xl shadow-lg p-5 text-white`}>
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-white/80 text-sm font-semibold uppercase tracking-wide mb-1">{s.label}</p>
+              <p className="text-4xl font-bold">{s.value}</p>
+            </div>
+            <div className="bg-white/20 p-2.5 rounded-lg">
+              <s.icon className="w-6 h-6" />
+            </div>
+          </div>
         </div>
-        <div className="bg-white/20 p-2.5 rounded-lg backdrop-blur">
-          <Icon className="w-6 h-6" />
-        </div>
-      </div>
+      ))}
+    </section>
+  );
+}
+
+function ActionButtons({ onEdit, onDelete }) {
+  return (
+    <div className="flex gap-2">
+      <button onClick={onEdit} className="p-2 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800" title="Editar">
+        <Pencil className="w-4 h-4" />
+      </button>
+      <button onClick={onDelete} className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-700" title="Eliminar">
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 }
 
-// ==================== MÓDULO IMPRESIÓN ====================
-function ModuloImpresion({ usuarios, servicios, onReload }) {
+function useEditFormScroll() {
+  const formRef = useRef(null);
+  const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return { formRef, scrollToForm };
+}
+
+function ModuleHeader({ title, icon: Icon, color, showForm, setShowForm, onOpen }) {
+  const map = {
+    amber: 'from-amber-600 to-orange-700 hover:from-amber-700 hover:to-orange-800',
+    blue: 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800',
+    green: 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
+    orange: 'from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800',
+    purple: 'from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800',
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+        <Icon className="w-8 h-8" />
+        {title}
+      </h2>
+      <button
+        onClick={() => {
+          const next = !showForm;
+          setShowForm(next);
+          if (next && onOpen) onOpen();
+        }}
+        className={`flex items-center gap-2 bg-gradient-to-r ${map[color]} text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg`}
+      >
+        {showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+        {showForm ? 'Cancelar' : 'Registrar'}
+      </button>
+    </div>
+  );
+}
+
+function ModuloCatalogacion({ libros, onReload, toastSuccess, toastError, confirmAction }) {
+  const empty = { titulo: '', autor: '', isbn: '', categoria: '', ubicacion: '', cantidad_total: '1' };
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    usuario_id: '',
-    cantidad_copias: '',
-    tipo_impresion: 'blanco_negro',
-    costo: '',
-    detalles: ''
-  });
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState(empty);
+  const { formRef, scrollToForm } = useEditFormScroll();
 
-  const handleSubmit = async (e) => {
+  const save = async (e) => {
     e.preventDefault();
-    const usuario = usuarios.find(u => u.id === formData.usuario_id);
-    if (!usuario) return;
+    const total = parseInt(formData.cantidad_total, 10) || 1;
+    const payload = {
+      titulo: formData.titulo,
+      autor: formData.autor || null,
+      isbn: formData.isbn || null,
+      categoria: formData.categoria || null,
+      ubicacion: formData.ubicacion || null,
+      cantidad_total: total,
+      cantidad_disponible: total,
+      estado: total > 0 ? 'disponible' : 'prestado',
+    };
 
-    const { error } = await supabase.from('servicios_impresion').insert([{
+    const { error } = editId
+      ? await supabase.from('libros').update(payload).eq('id', editId)
+      : await supabase.from('libros').insert([payload]);
+
+    if (error) return toastError(error.message);
+    toastSuccess(editId ? 'Libro actualizado.' : 'Libro agregado.');
+    setEditId(null);
+    setFormData(empty);
+    setShowForm(false);
+    onReload();
+  };
+
+  const edit = (row) => {
+    setEditId(row.id);
+    setFormData({
+      titulo: row.titulo || '', autor: row.autor || '', isbn: row.isbn || '', categoria: row.categoria || '', ubicacion: row.ubicacion || '', cantidad_total: String(row.cantidad_total || 1),
+    });
+    setShowForm(true);
+    setTimeout(scrollToForm, 20);
+  };
+
+  const remove = async (id) => {
+    const ok = await confirmAction({ title: 'Eliminar libro', text: 'Esta acción removerá el libro del catálogo.', confirmText: 'Sí, eliminar' });
+    if (!ok) return;
+    const { error } = await supabase.from('libros').delete().eq('id', id);
+    if (error) return toastError(error.message);
+    toastSuccess('Libro eliminado.');
+    onReload();
+  };
+
+  return (
+    <section className="space-y-6">
+      <ModuleHeader title="Módulo de Catalogación" icon={Library} color="amber" showForm={showForm} setShowForm={setShowForm} onOpen={scrollToForm} />
+      {showForm && (
+        <form ref={formRef} onSubmit={save} className="bg-white rounded-2xl shadow-xl p-6 space-y-4 border-l-8 border-amber-500">
+          <FormGrid>
+            <Input value={formData.titulo} onChange={(e) => setFormData({ ...formData, titulo: e.target.value })} placeholder="Título" required />
+            <Input value={formData.autor} onChange={(e) => setFormData({ ...formData, autor: e.target.value })} placeholder="Autor" />
+            <Input value={formData.isbn} onChange={(e) => setFormData({ ...formData, isbn: e.target.value })} placeholder="ISBN" />
+            <Input value={formData.categoria} onChange={(e) => setFormData({ ...formData, categoria: e.target.value })} placeholder="Categoría" />
+            <Input value={formData.ubicacion} onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })} placeholder="Ubicación" />
+            <Input type="number" min="1" value={formData.cantidad_total} onChange={(e) => setFormData({ ...formData, cantidad_total: e.target.value })} placeholder="Cantidad" />
+          </FormGrid>
+          <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar libro'}</SubmitButton>
+        </form>
+      )}
+
+      <SimpleTable
+        headers={['Título', 'Autor', 'ISBN', 'Stock', 'Acciones']}
+        rows={libros.map((l) => [
+          l.titulo,
+          l.autor || '-',
+          l.isbn || '-',
+          `${l.cantidad_disponible ?? 0}/${l.cantidad_total ?? 0}`,
+          <ActionButtons key={l.id} onEdit={() => edit(l)} onDelete={() => remove(l.id)} />,
+        ])}
+      />
+    </section>
+  );
+}
+
+function ModuloUsuarios({ usuarios, onReload, toastSuccess, toastError, confirmAction }) {
+  const empty = { nombre: '', tipo: 'docente', identificacion: '', grado: '', seccion: '', telefono: '', email: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState(empty);
+  const { formRef, scrollToForm } = useEditFormScroll();
+
+  const save = async (e) => {
+    e.preventDefault();
+    const { error } = editId
+      ? await supabase.from('usuarios').update(formData).eq('id', editId)
+      : await supabase.from('usuarios').insert([formData]);
+
+    if (error) return toastError(error.message);
+    toastSuccess(editId ? 'Usuario actualizado.' : 'Usuario creado.');
+    setEditId(null);
+    setFormData(empty);
+    setShowForm(false);
+    onReload();
+  };
+
+  const edit = (u) => {
+    setEditId(u.id);
+    setFormData({
+      nombre: u.nombre || '', tipo: u.tipo || 'docente', identificacion: u.identificacion || '', grado: u.grado || '', seccion: u.seccion || '', telefono: u.telefono || '', email: u.email || '',
+    });
+    setShowForm(true);
+    setTimeout(scrollToForm, 20);
+  };
+
+  const remove = async (id) => {
+    const ok = await confirmAction({ title: 'Eliminar usuario', text: 'Se eliminará el usuario y sus registros relacionados.', confirmText: 'Sí, eliminar' });
+    if (!ok) return;
+    const { error } = await supabase.from('usuarios').delete().eq('id', id);
+    if (error) return toastError(error.message);
+    toastSuccess('Usuario eliminado.');
+    onReload();
+  };
+
+  const importCsv = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCSV(text);
+    if (!rows.length) return toastError('CSV vacío o mal formateado.');
+
+    const { error } = await supabase.from('usuarios').insert(rows);
+    if (error) return toastError(error.message);
+    toastSuccess(`${rows.length} usuarios importados.`);
+    setShowImport(false);
+    onReload();
+  };
+
+  return (
+    <section className="space-y-6">
+      <div className="flex flex-wrap gap-3 justify-between items-center">
+        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3"><Users className="w-8 h-8 text-blue-600" />Gestión de Usuarios</h2>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => downloadExcelTemplate('usuarios')} className="flex items-center gap-2 bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg"><Download className="w-4 h-4" />Plantilla</button>
+          <button onClick={() => setShowImport(!showImport)} className="flex items-center gap-2 bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg"><Upload className="w-4 h-4" />Importar CSV</button>
+          <button onClick={() => exportToCSV(usuarios, `usuarios-${new Date().toISOString().split('T')[0]}`)} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg"><Download className="w-4 h-4" />Exportar</button>
+          <button onClick={() => { setShowForm(!showForm); if (!showForm) setTimeout(scrollToForm, 20); }} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-2 px-4 rounded-lg">{showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}{showForm ? 'Cancelar' : 'Registrar'}</button>
+        </div>
+      </div>
+
+      {showImport && <div className="bg-white rounded-xl shadow p-4"><input type="file" accept=".csv" onChange={importCsv} className="block w-full text-sm" /></div>}
+
+      {showForm && (
+        <form ref={formRef} onSubmit={save} className="bg-white rounded-2xl shadow-xl p-6 space-y-4 border-l-8 border-blue-500">
+          <FormGrid>
+            <Input required value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} placeholder="Nombre" />
+            <Select value={formData.tipo} onChange={(e) => setFormData({ ...formData, tipo: e.target.value })} options={[['docente', 'Docente'], ['padre', 'Padre'], ['estudiante', 'Estudiante']]} />
+            <Input value={formData.identificacion} onChange={(e) => setFormData({ ...formData, identificacion: e.target.value })} placeholder="Identificación" />
+            <Input value={formData.grado} onChange={(e) => setFormData({ ...formData, grado: e.target.value })} placeholder="Grado" />
+            <Input value={formData.seccion} onChange={(e) => setFormData({ ...formData, seccion: e.target.value })} placeholder="Sección" />
+            <Input value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} placeholder="Teléfono" />
+            <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="Email" className="md:col-span-2" />
+          </FormGrid>
+          <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar usuario'}</SubmitButton>
+        </form>
+      )}
+
+      <SimpleTable
+        headers={['Nombre', 'Tipo', 'Identificación', 'Grado', 'Contacto', 'Acciones']}
+        rows={usuarios.map((u) => [u.nombre, u.tipo, u.identificacion || '-', [u.grado, u.seccion].filter(Boolean).join('-') || '-', u.telefono || u.email || '-', <ActionButtons key={u.id} onEdit={() => edit(u)} onDelete={() => remove(u.id)} />])}
+      />
+    </section>
+  );
+}
+
+function ModuloImpresion({ usuarios, servicios, onReload, toastSuccess, toastError, confirmAction }) {
+  const empty = { usuario_id: '', cantidad_copias: '', tipo_impresion: 'blanco_negro', costo: '', detalles: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState(empty);
+  const { formRef, scrollToForm } = useEditFormScroll();
+
+  const save = async (e) => {
+    e.preventDefault();
+    const usuario = usuarios.find((u) => u.id === formData.usuario_id);
+    if (!usuario) return toastError('Debes seleccionar un usuario válido.');
+    const payload = {
       usuario_id: formData.usuario_id,
       usuario_nombre: usuario.nombre,
-      cantidad_copias: parseInt(formData.cantidad_copias),
+      cantidad_copias: parseInt(formData.cantidad_copias, 10),
       tipo_impresion: formData.tipo_impresion,
       costo: formData.costo || null,
       detalles: formData.detalles || null,
       fecha: new Date().toISOString().split('T')[0],
-      hora: new Date().toTimeString().split(' ')[0]
-    }]);
+      hora: new Date().toTimeString().split(' ')[0],
+    };
 
-    if (!error) {
-      setFormData({ usuario_id: '', cantidad_copias: '', tipo_impresion: 'blanco_negro', costo: '', detalles: '' });
-      setShowForm(false);
-      onReload();
-    }
+    const { error } = editId ? await supabase.from('servicios_impresion').update(payload).eq('id', editId) : await supabase.from('servicios_impresion').insert([payload]);
+    if (error) return toastError(error.message);
+    toastSuccess(editId ? 'Registro de impresión actualizado.' : 'Registro de impresión creado.');
+    setEditId(null);
+    setFormData(empty);
+    setShowForm(false);
+    onReload();
+  };
+
+  const edit = (row) => {
+    setEditId(row.id);
+    setFormData({ usuario_id: row.usuario_id || '', cantidad_copias: String(row.cantidad_copias || ''), tipo_impresion: row.tipo_impresion || 'blanco_negro', costo: row.costo || '', detalles: row.detalles || '' });
+    setShowForm(true);
+    setTimeout(scrollToForm, 20);
+  };
+
+  const remove = async (id) => {
+    const ok = await confirmAction({ title: 'Eliminar impresión', text: 'Se eliminará el registro de impresión seleccionado.', confirmText: 'Sí, eliminar' });
+    if (!ok) return;
+    const { error } = await supabase.from('servicios_impresion').delete().eq('id', id);
+    if (error) return toastError(error.message);
+    toastSuccess('Registro eliminado.');
+    onReload();
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <Printer className="w-8 h-8 text-purple-600" />
-          Servicio de Impresión
-        </h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold py-3 px-6 rounded-xl hover:from-purple-700 hover:to-purple-800 transform hover:scale-105 transition-all shadow-lg"
-        >
-          {showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          {showForm ? 'Cancelar' : 'Registrar'}
-        </button>
-      </div>
-
-      {/* Quick Form */}
+    <section className="space-y-6">
+      <ModuleHeader title="Servicio de Impresión" icon={Printer} color="purple" showForm={showForm} setShowForm={setShowForm} onOpen={scrollToForm} />
       {showForm && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-purple-500">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Registro Rápido</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <select
-                value={formData.usuario_id}
-                onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-                required
-              >
-                <option value="">Seleccionar usuario...</option>
-                {usuarios.map(u => (
-                  <option key={u.id} value={u.id}>{u.nombre} ({u.tipo})</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                value={formData.cantidad_copias}
-                onChange={(e) => setFormData({ ...formData, cantidad_copias: e.target.value })}
-                placeholder="Cantidad de copias"
-                min="1"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-                required
-              />
-              <select
-                value={formData.tipo_impresion}
-                onChange={(e) => setFormData({ ...formData, tipo_impresion: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-              >
-                <option value="blanco_negro">Blanco y Negro</option>
-                <option value="color">Color</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                value={formData.costo}
-                onChange={(e) => setFormData({ ...formData, costo: e.target.value })}
-                placeholder="Costo (opcional)"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-              />
-              <input
-                type="text"
-                value={formData.detalles}
-                onChange={(e) => setFormData({ ...formData, detalles: e.target.value })}
-                placeholder="Detalles (opcional)"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold py-3 px-6 rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg"
-            >
-              Guardar Registro
-            </button>
-          </form>
-        </div>
+        <form ref={formRef} onSubmit={save} className="bg-white rounded-2xl shadow-xl p-6 space-y-4 border-l-8 border-purple-500">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Select value={formData.usuario_id} onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })} required options={[['', 'Seleccionar usuario...'], ...usuarios.map((u) => [u.id, `${u.nombre} (${u.tipo})`])]} />
+            <Input required min="1" type="number" value={formData.cantidad_copias} onChange={(e) => setFormData({ ...formData, cantidad_copias: e.target.value })} placeholder="Cantidad" />
+            <Select value={formData.tipo_impresion} onChange={(e) => setFormData({ ...formData, tipo_impresion: e.target.value })} options={[['blanco_negro', 'Blanco y negro'], ['color', 'Color']]} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input value={formData.costo} onChange={(e) => setFormData({ ...formData, costo: e.target.value })} placeholder="Costo" />
+            <Input value={formData.detalles} onChange={(e) => setFormData({ ...formData, detalles: e.target.value })} placeholder="Detalles" />
+          </div>
+          <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar registro'}</SubmitButton>
+        </form>
       )}
 
-      {/* History Table */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-purple-600 to-purple-700 text-white">
-              <tr>
-                <th className="px-4 py-3 text-left font-bold">Fecha</th>
-                <th className="px-4 py-3 text-left font-bold">Usuario</th>
-                <th className="px-4 py-3 text-left font-bold">Copias</th>
-                <th className="px-4 py-3 text-left font-bold">Tipo</th>
-                <th className="px-4 py-3 text-left font-bold">Costo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {servicios.map((s, idx) => (
-                <tr key={s.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-purple-50'}>
-                  <td className="px-4 py-3 text-gray-700">{new Date(s.fecha).toLocaleDateString('es')}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-800">{s.usuario_nombre}</td>
-                  <td className="px-4 py-3 text-gray-700">{s.cantidad_copias}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      s.tipo_impresion === 'color' ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {s.tipo_impresion === 'color' ? 'Color' : 'B/N'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{s.costo || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+      <SimpleTable headers={['Fecha', 'Usuario', 'Copias', 'Tipo', 'Costo', 'Acciones']} rows={servicios.map((s) => [new Date(s.fecha).toLocaleDateString('es'), s.usuario_nombre, s.cantidad_copias, s.tipo_impresion, s.costo || '-', <ActionButtons key={s.id} onEdit={() => edit(s)} onDelete={() => remove(s.id)} />])} />
+    </section>
   );
 }
 
-// ==================== MÓDULO VIDEO ====================
-function ModuloVideo({ usuarios, servicios, onReload }) {
+function ModuloVideo({ usuarios, servicios, onReload, toastSuccess, toastError, confirmAction }) {
+  const empty = { usuario_id: '', proposito: '', duracion_minutos: '', hora_inicio: '', detalles: '' };
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    usuario_id: '',
-    proposito: '',
-    duracion_minutos: '',
-    hora_inicio: '',
-    detalles: ''
-  });
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState(empty);
+  const { formRef, scrollToForm } = useEditFormScroll();
 
-  const handleSubmit = async (e) => {
+  const save = async (e) => {
     e.preventDefault();
-    const usuario = usuarios.find(u => u.id === formData.usuario_id);
-    if (!usuario) return;
+    const usuario = usuarios.find((u) => u.id === formData.usuario_id);
+    if (!usuario) return toastError('Debes seleccionar un usuario válido.');
 
-    const { error } = await supabase.from('servicios_video').insert([{
+    const payload = {
       usuario_id: formData.usuario_id,
       usuario_nombre: usuario.nombre,
       proposito: formData.proposito,
-      duracion_minutos: formData.duracion_minutos ? parseInt(formData.duracion_minutos) : null,
+      duracion_minutos: formData.duracion_minutos ? parseInt(formData.duracion_minutos, 10) : null,
       hora_inicio: formData.hora_inicio,
       detalles: formData.detalles || null,
-      fecha: new Date().toISOString().split('T')[0]
-    }]);
+      fecha: new Date().toISOString().split('T')[0],
+    };
 
-    if (!error) {
-      setFormData({ usuario_id: '', proposito: '', duracion_minutos: '', hora_inicio: '', detalles: '' });
-      setShowForm(false);
-      onReload();
-    }
+    const { error } = editId ? await supabase.from('servicios_video').update(payload).eq('id', editId) : await supabase.from('servicios_video').insert([payload]);
+    if (error) return toastError(error.message);
+    toastSuccess(editId ? 'Uso de sala actualizado.' : 'Uso de sala registrado.');
+    setEditId(null);
+    setFormData(empty);
+    setShowForm(false);
+    onReload();
+  };
+
+  const edit = (row) => {
+    setEditId(row.id);
+    setFormData({ usuario_id: row.usuario_id || '', proposito: row.proposito || '', duracion_minutos: row.duracion_minutos || '', hora_inicio: row.hora_inicio || '', detalles: row.detalles || '' });
+    setShowForm(true);
+    setTimeout(scrollToForm, 20);
+  };
+
+  const remove = async (id) => {
+    const ok = await confirmAction({ title: 'Eliminar uso de sala', text: 'Se eliminará el registro seleccionado.', confirmText: 'Sí, eliminar' });
+    if (!ok) return;
+    const { error } = await supabase.from('servicios_video').delete().eq('id', id);
+    if (error) return toastError(error.message);
+    toastSuccess('Registro eliminado.');
+    onReload();
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <Video className="w-8 h-8 text-orange-600" />
-          Sala de Video
-        </h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white font-bold py-3 px-6 rounded-xl hover:from-orange-700 hover:to-orange-800 transform hover:scale-105 transition-all shadow-lg"
-        >
-          {showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          {showForm ? 'Cancelar' : 'Registrar Uso'}
-        </button>
-      </div>
-
+    <section className="space-y-6">
+      <ModuleHeader title="Sala de Video" icon={Video} color="orange" showForm={showForm} setShowForm={setShowForm} onOpen={scrollToForm} />
       {showForm && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-orange-500">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Registro de Uso</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <select
-                value={formData.usuario_id}
-                onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
-                required
-              >
-                <option value="">Seleccionar usuario...</option>
-                {usuarios.map(u => (
-                  <option key={u.id} value={u.id}>{u.nombre} ({u.tipo})</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={formData.proposito}
-                onChange={(e) => setFormData({ ...formData, proposito: e.target.value })}
-                placeholder="Propósito (ej: Clase de biología)"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="time"
-                value={formData.hora_inicio}
-                onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
-                required
-              />
-              <input
-                type="number"
-                value={formData.duracion_minutos}
-                onChange={(e) => setFormData({ ...formData, duracion_minutos: e.target.value })}
-                placeholder="Duración (minutos)"
-                min="1"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-orange-600 to-orange-700 text-white font-bold py-3 px-6 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg"
-            >
-              Guardar Registro
-            </button>
-          </form>
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-orange-600 to-orange-700 text-white">
-              <tr>
-                <th className="px-4 py-3 text-left font-bold">Fecha</th>
-                <th className="px-4 py-3 text-left font-bold">Usuario</th>
-                <th className="px-4 py-3 text-left font-bold">Propósito</th>
-                <th className="px-4 py-3 text-left font-bold">Hora</th>
-                <th className="px-4 py-3 text-left font-bold">Duración</th>
-              </tr>
-            </thead>
-            <tbody>
-              {servicios.map((s, idx) => (
-                <tr key={s.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-orange-50'}>
-                  <td className="px-4 py-3 text-gray-700">{new Date(s.fecha).toLocaleDateString('es')}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-800">{s.usuario_nombre}</td>
-                  <td className="px-4 py-3 text-gray-700">{s.proposito}</td>
-                  <td className="px-4 py-3 text-gray-700">{s.hora_inicio}</td>
-                  <td className="px-4 py-3 text-gray-700">{s.duracion_minutos ? `${s.duracion_minutos} min` : '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==================== MÓDULO LECTURA ====================
-function ModuloLectura({ usuarios, actividades, onReload }) {
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    nombre_actividad: '',
-    tipo: 'taller',
-    descripcion: '',
-    fecha: new Date().toISOString().split('T')[0],
-    participantes: '',
-    responsable: ''
-  });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const { error } = await supabase.from('actividades_lectura').insert([{
-      nombre_actividad: formData.nombre_actividad,
-      tipo: formData.tipo,
-      descripcion: formData.descripcion || null,
-      fecha: formData.fecha,
-      participantes: formData.participantes ? parseInt(formData.participantes) : null,
-      responsable: formData.responsable || null
-    }]);
-
-    if (!error) {
-      setFormData({
-        nombre_actividad: '',
-        tipo: 'taller',
-        descripcion: '',
-        fecha: new Date().toISOString().split('T')[0],
-        participantes: '',
-        responsable: ''
-      });
-      setShowForm(false);
-      onReload();
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <Sparkles className="w-8 h-8 text-green-600" />
-          Promoción de Lectura
-        </h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white font-bold py-3 px-6 rounded-xl hover:from-green-700 hover:to-green-800 transform hover:scale-105 transition-all shadow-lg"
-        >
-          {showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          {showForm ? 'Cancelar' : 'Nueva Actividad'}
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-green-500">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Registrar Actividad</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                value={formData.nombre_actividad}
-                onChange={(e) => setFormData({ ...formData, nombre_actividad: e.target.value })}
-                placeholder="Nombre de la actividad"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
-                required
-              />
-              <select
-                value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
-              >
-                <option value="taller">Taller</option>
-                <option value="club">Club de Lectura</option>
-                <option value="evento">Evento</option>
-                <option value="presentacion">Presentación</option>
-              </select>
-            </div>
-            <textarea
-              value={formData.descripcion}
-              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-              placeholder="Descripción de la actividad"
-              rows="3"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all resize-none"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
-                type="date"
-                value={formData.fecha}
-                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
-                required
-              />
-              <input
-                type="number"
-                value={formData.participantes}
-                onChange={(e) => setFormData({ ...formData, participantes: e.target.value })}
-                placeholder="N° Participantes"
-                min="1"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
-              />
-              <input
-                type="text"
-                value={formData.responsable}
-                onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
-                placeholder="Responsable"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white font-bold py-3 px-6 rounded-xl hover:from-green-700 hover:to-green-800 transition-all shadow-lg"
-            >
-              Guardar Actividad
-            </button>
-          </form>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {actividades.map(a => (
-          <div key={a.id} className="bg-white rounded-xl shadow-lg p-5 border-l-4 border-green-500 hover:shadow-xl transition-all">
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="font-bold text-lg text-gray-800">{a.nombre_actividad}</h3>
-              <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                {a.tipo}
-              </span>
-            </div>
-            <p className="text-gray-600 text-sm mb-3">{a.descripcion}</p>
-            <div className="flex justify-between items-center text-sm text-gray-500">
-              <span>{new Date(a.fecha).toLocaleDateString('es')}</span>
-              {a.participantes && <span>{a.participantes} participantes</span>}
-            </div>
+        <form ref={formRef} onSubmit={save} className="bg-white rounded-2xl shadow-xl p-6 space-y-4 border-l-8 border-orange-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select value={formData.usuario_id} onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })} required options={[['', 'Seleccionar usuario...'], ...usuarios.map((u) => [u.id, `${u.nombre} (${u.tipo})`])]} />
+            <Input required value={formData.proposito} onChange={(e) => setFormData({ ...formData, proposito: e.target.value })} placeholder="Propósito" />
           </div>
-        ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input required type="time" value={formData.hora_inicio} onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })} />
+            <Input min="1" type="number" value={formData.duracion_minutos} onChange={(e) => setFormData({ ...formData, duracion_minutos: e.target.value })} placeholder="Duración (min)" />
+            <Input value={formData.detalles} onChange={(e) => setFormData({ ...formData, detalles: e.target.value })} placeholder="Detalles" />
+          </div>
+          <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar registro'}</SubmitButton>
+        </form>
+      )}
+
+      <SimpleTable headers={['Fecha', 'Usuario', 'Propósito', 'Hora', 'Duración', 'Acciones']} rows={servicios.map((s) => [new Date(s.fecha).toLocaleDateString('es'), s.usuario_nombre, s.proposito, s.hora_inicio, s.duracion_minutos ? `${s.duracion_minutos} min` : '-', <ActionButtons key={s.id} onEdit={() => edit(s)} onDelete={() => remove(s.id)} />])} />
+    </section>
+  );
+}
+
+function ModuloLectura({ actividades, onReload, toastSuccess, toastError, confirmAction }) {
+  const empty = { nombre_actividad: '', tipo: 'taller', descripcion: '', fecha: new Date().toISOString().split('T')[0], participantes: '', responsable: '' };
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState(empty);
+  const { formRef, scrollToForm } = useEditFormScroll();
+
+  const save = async (e) => {
+    e.preventDefault();
+    const payload = { ...formData, descripcion: formData.descripcion || null, participantes: formData.participantes ? parseInt(formData.participantes, 10) : null, responsable: formData.responsable || null };
+    const { error } = editId ? await supabase.from('actividades_lectura').update(payload).eq('id', editId) : await supabase.from('actividades_lectura').insert([payload]);
+    if (error) return toastError(error.message);
+    toastSuccess(editId ? 'Actividad actualizada.' : 'Actividad registrada.');
+    setEditId(null);
+    setFormData(empty);
+    setShowForm(false);
+    onReload();
+  };
+
+  const edit = (row) => {
+    setEditId(row.id);
+    setFormData({ nombre_actividad: row.nombre_actividad || '', tipo: row.tipo || 'taller', descripcion: row.descripcion || '', fecha: row.fecha || new Date().toISOString().split('T')[0], participantes: row.participantes || '', responsable: row.responsable || '' });
+    setShowForm(true);
+    setTimeout(scrollToForm, 20);
+  };
+
+  const remove = async (id) => {
+    const ok = await confirmAction({ title: 'Eliminar actividad', text: 'Se eliminará la actividad seleccionada.', confirmText: 'Sí, eliminar' });
+    if (!ok) return;
+    const { error } = await supabase.from('actividades_lectura').delete().eq('id', id);
+    if (error) return toastError(error.message);
+    toastSuccess('Actividad eliminada.');
+    onReload();
+  };
+
+  return (
+    <section className="space-y-6">
+      <ModuleHeader title="Promoción de Lectura" icon={Sparkles} color="green" showForm={showForm} setShowForm={setShowForm} onOpen={scrollToForm} />
+      {showForm && (
+        <form ref={formRef} onSubmit={save} className="bg-white rounded-2xl shadow-xl p-6 space-y-4 border-l-8 border-green-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input required value={formData.nombre_actividad} onChange={(e) => setFormData({ ...formData, nombre_actividad: e.target.value })} placeholder="Nombre actividad" />
+            <Select value={formData.tipo} onChange={(e) => setFormData({ ...formData, tipo: e.target.value })} options={[['taller', 'Taller'], ['club', 'Club'], ['evento', 'Evento'], ['presentacion', 'Presentación']]} />
+          </div>
+          <Input as="textarea" value={formData.descripcion} onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })} placeholder="Descripción" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input required type="date" value={formData.fecha} onChange={(e) => setFormData({ ...formData, fecha: e.target.value })} />
+            <Input min="1" type="number" value={formData.participantes} onChange={(e) => setFormData({ ...formData, participantes: e.target.value })} placeholder="Participantes" />
+            <Input value={formData.responsable} onChange={(e) => setFormData({ ...formData, responsable: e.target.value })} placeholder="Responsable" />
+          </div>
+          <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar actividad'}</SubmitButton>
+        </form>
+      )}
+
+      <SimpleTable headers={['Actividad', 'Tipo', 'Fecha', 'Participantes', 'Acciones']} rows={actividades.map((a) => [a.nombre_actividad, a.tipo, new Date(a.fecha).toLocaleDateString('es'), a.participantes || '-', <ActionButtons key={a.id} onEdit={() => edit(a)} onDelete={() => remove(a.id)} />])} />
+    </section>
+  );
+}
+
+function ConfirmModal({ state, onResolve }) {
+  if (!state) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border-t-8 border-amber-500 p-6">
+        <h3 className="text-xl font-bold text-amber-900">{state.title}</h3>
+        <p className="text-gray-700 mt-2">{state.text}</p>
+        <div className="flex justify-end gap-2 mt-6">
+          <button onClick={() => onResolve(false)} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold">
+            {state.cancelText}
+          </button>
+          <button onClick={() => onResolve(true)} className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 text-white font-semibold">
+            {state.confirmText}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ==================== MÓDULO USUARIOS ====================
-function ModuloUsuarios({ usuarios, onReload }) {
-  const [showForm, setShowForm] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    tipo: 'docente',
-    identificacion: '',
-    grado: '',
-    seccion: '',
-    telefono: '',
-    email: ''
-  });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const { error } = await supabase.from('usuarios').insert([formData]);
-
-    if (!error) {
-      setFormData({ nombre: '', tipo: 'docente', identificacion: '', grado: '', seccion: '', telefono: '', email: '' });
-      setShowForm(false);
-      onReload();
-    }
-  };
-
-  const handleCSVImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const text = await file.text();
-    const data = parseCSV(text);
-    
-    if (data.length === 0) {
-      alert('El archivo CSV está vacío o mal formateado');
-      return;
-    }
-
-    const { error } = await supabase.from('usuarios').insert(data);
-
-    if (!error) {
-      alert(`${data.length} usuarios importados exitosamente`);
-      onReload();
-      setShowImport(false);
-    } else {
-      alert('Error al importar: ' + error.message);
-    }
-  };
-
-  const handleExport = () => {
-    exportToCSV(usuarios, `usuarios-${new Date().toISOString().split('T')[0]}`);
-  };
-
+function ToastViewport({ toasts }) {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-3 justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <Users className="w-8 h-8 text-blue-600" />
-          Gestión de Usuarios
-        </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => downloadExcelTemplate('usuarios')}
-            className="flex items-center gap-2 bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition-all"
-          >
-            <Download className="w-4 h-4" />
-            Plantilla
-          </button>
-          <button
-            onClick={() => setShowImport(!showImport)}
-            className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-all"
-          >
-            <Upload className="w-4 h-4" />
-            Importar CSV
-          </button>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-all"
-          >
-            <Download className="w-4 h-4" />
-            Exportar
-          </button>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-2 px-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
-          >
-            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            Agregar
-          </button>
+    <div className="fixed top-4 right-4 z-[110] space-y-2 w-[min(360px,calc(100vw-2rem))]">
+      {toasts.map((t) => (
+        <div key={t.id} className={`rounded-xl shadow-xl border px-4 py-3 text-sm font-medium ${t.type === 'success' ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-orange-50 border-orange-300 text-orange-900'}`}>
+          {t.message}
         </div>
-      </div>
-
-      {showImport && (
-        <div className="bg-blue-50 rounded-xl p-6 border-l-4 border-blue-500">
-          <h3 className="font-bold text-lg text-gray-800 mb-3">Importar Usuarios desde CSV</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            El archivo debe tener las columnas: nombre, tipo, identificacion, grado, seccion, telefono, email
-          </p>
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleCSVImport}
-            className="w-full"
-          />
-        </div>
-      )}
-
-      {showForm && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 border-l-8 border-blue-500">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Nuevo Usuario</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Nombre completo"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                required
-              />
-              <select
-                value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              >
-                <option value="docente">Docente</option>
-                <option value="padre">Padre/Madre</option>
-                <option value="estudiante">Estudiante</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
-                type="text"
-                value={formData.identificacion}
-                onChange={(e) => setFormData({ ...formData, identificacion: e.target.value })}
-                placeholder="Identificación"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              />
-              <input
-                type="text"
-                value={formData.grado}
-                onChange={(e) => setFormData({ ...formData, grado: e.target.value })}
-                placeholder="Grado (si aplica)"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              />
-              <input
-                type="text"
-                value={formData.seccion}
-                onChange={(e) => setFormData({ ...formData, seccion: e.target.value })}
-                placeholder="Sección (si aplica)"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="tel"
-                value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                placeholder="Teléfono"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              />
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="Email"
-                className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
-            >
-              Guardar Usuario
-            </button>
-          </form>
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-              <tr>
-                <th className="px-4 py-3 text-left font-bold">Nombre</th>
-                <th className="px-4 py-3 text-left font-bold">Tipo</th>
-                <th className="px-4 py-3 text-left font-bold">ID</th>
-                <th className="px-4 py-3 text-left font-bold">Contacto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usuarios.map((u, idx) => (
-                <tr key={u.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                  <td className="px-4 py-3 font-semibold text-gray-800">{u.nombre}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      u.tipo === 'docente' ? 'bg-purple-100 text-purple-700' :
-                      u.tipo === 'padre' ? 'bg-green-100 text-green-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
-                      {u.tipo}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{u.identificacion || '-'}</td>
-                  <td className="px-4 py-3 text-gray-600 text-sm">{u.email || u.telefono || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      ))}
     </div>
   );
+}
+
+function SimpleTable({ headers, rows }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-xl overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-gradient-to-r from-amber-700 to-red-700 text-white">
+          <tr>{headers.map((h) => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row, idx) => (
+            <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-amber-50'}>
+              {row.map((cell, i) => <td key={i} className="px-4 py-3 text-gray-700">{cell}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FormGrid({ children }) {
+  return <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>;
+}
+
+function Input({ as = 'input', className = '', ...props }) {
+  const styles = `px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-200 focus:border-amber-500 transition-all ${className}`;
+  if (as === 'textarea') return <textarea {...props} rows={3} className={styles} />;
+  return <input {...props} className={styles} />;
+}
+
+function Select({ options, className = '', ...props }) {
+  return (
+    <select {...props} className={`px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-200 focus:border-amber-500 transition-all ${className}`}>
+      {options.map(([value, label]) => <option key={String(value)} value={value}>{label}</option>)}
+    </select>
+  );
+}
+
+function SubmitButton({ children }) {
+  return <button className="w-full bg-gradient-to-r from-amber-600 to-orange-700 text-white font-bold py-3 rounded-xl">{children}</button>;
 }
