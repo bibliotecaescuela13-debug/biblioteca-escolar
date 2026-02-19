@@ -1319,9 +1319,42 @@ function Select({ options, className = '', ...props }) {
 function SubmitButton({ children }) {
   return <button className="w-full bg-gradient-to-r from-amber-600 to-orange-700 text-white font-bold py-3 rounded-xl">{children}</button>;
 }
+<<<<<<< codex/fix-invalid-supabaseurl-error-f08que
+// ... (continuación del código después de la función SubmitButton)
+
+// --- COMPONENTES DE INTERFAZ RESTANTES ---
+
+/**
+ * Vista de los Toasts (Notificaciones)
+ * Asegura que las alertas se muestren correctamente en la pantalla
+ */
+function ToastViewport({ toasts }) {
+  return (
+    <div className="fixed top-4 right-4 z-[110] space-y-2 w-[min(360px,calc(100vw-2rem))]">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`rounded-xl shadow-xl border px-4 py-3 text-sm font-medium animate-in slide-in-from-right ${
+            t.type === 'success' 
+              ? 'bg-amber-50 border-amber-300 text-amber-900' 
+              : 'bg-orange-50 border-orange-300 text-orange-900'
+          }`}
+        >
+          {t.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Estructura de tabla simple reutilizable
+ */
+=======
 
 // ... (asegúrate de que este código pegue justo después de la función SubmitButton)
 
+>>>>>>> main
 function SimpleTable({ headers, rows }) {
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-x-auto border border-amber-100">
@@ -1336,6 +1369,21 @@ function SimpleTable({ headers, rows }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-amber-50">
+<<<<<<< codex/fix-invalid-supabaseurl-error-f08que
+          {rows.length > 0 ? (
+            rows.map((row, idx) => (
+              <tr key={idx} className="hover:bg-amber-50/50 transition-colors">
+                {row.map((cell, i) => (
+                  <td key={i} className="px-4 py-3 text-gray-700 text-sm">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={headers.length} className="px-4 py-8 text-center text-gray-500 italic">
+=======
           {rows.map((row, idx) => (
             <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-amber-50 hover:bg-amber-100 transition-colors'}>
               {row.map((cell, i) => (
@@ -1348,6 +1396,7 @@ function SimpleTable({ headers, rows }) {
           {rows.length === 0 && (
             <tr>
               <td colSpan={headers.length} className="px-4 py-10 text-center text-gray-400 italic">
+>>>>>>> main
                 No hay registros para mostrar.
               </td>
             </tr>
@@ -1356,6 +1405,9 @@ function SimpleTable({ headers, rows }) {
       </table>
     </div>
   );
+<<<<<<< codex/fix-invalid-supabaseurl-error-f08que
+}
+=======
 }
 
 function FormGrid({ children }) {
@@ -1401,3 +1453,4 @@ function ToastViewport({ toasts }) {
     </div>
   );
 }
+>>>>>>> main
