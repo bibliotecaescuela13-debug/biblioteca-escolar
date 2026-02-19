@@ -30,7 +30,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isStudent, setIsStudent] = useState(false); // preparado para próximas vistas alumno
+  const [isStudent, setIsStudent] = useState(false);
 
   const [session, setSession] = useState(null);
   const [libros, setLibros] = useState([]);
@@ -114,7 +114,6 @@ export default function App() {
       return;
     }
 
-    // futura extensión para estudiantes
     setIsAdmin(false);
     setIsStudent(true);
   };
@@ -895,7 +894,7 @@ function ModuloPrestamos({ libros, usuarios, prestamos, onReload, toastSuccess, 
               required
               value={formData.libro_id}
               onChange={(e) => setFormData({ ...formData, libro_id: e.target.value })}
-              options={[['', 'Seleccionar libro disponible...'], ...librosDisponibles.map((l) => [l.id, `${l.titulo} — ${l.autor || 'Sin autor'}`])]}
+              options={[['', 'Seleccionar libro disponible...'], ...librosDisponibles.map((l) => [l.id, `${l.titulo} — ${l.autor || 'Sin autor'} `])]}
             />
             <Input
               required
@@ -986,7 +985,13 @@ function ModuloUsuarios({ usuarios, onReload, toastSuccess, toastError, confirmA
   const edit = (u) => {
     setEditId(u.id);
     setFormData({
-      nombre: u.nombre || '', tipo: u.tipo || 'docente', identificacion: u.identificacion || '', grado: u.grado || '', seccion: u.seccion || '', telefono: u.telefono || '', email: u.email || '',
+      nombre: u.nombre || '',
+      tipo: u.tipo || 'docente',
+      identificacion: u.identificacion || '',
+      grado: u.grado || '',
+      seccion: u.seccion || '',
+      telefono: u.telefono || '',
+      email: u.email || '',
     });
     setShowForm(true);
     setTimeout(scrollToForm, 20);
@@ -1007,6 +1012,7 @@ function ModuloUsuarios({ usuarios, onReload, toastSuccess, toastError, confirmA
     const text = await file.text();
     const rows = parseCSV(text);
     if (!rows.length) return toastError('CSV vacío o mal formateado.');
+
     const { error } = await supabase.from('usuarios').insert(rows);
     if (error) return toastError(error.message);
     toastSuccess(`${rows.length} usuarios importados.`);
@@ -1115,6 +1121,7 @@ function ModuloImpresion({ usuarios, servicios, onReload, toastSuccess, toastErr
           <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar registro'}</SubmitButton>
         </form>
       )}
+
       <SimpleTable headers={['Fecha', 'Usuario', 'Copias', 'Tipo', 'Costo', 'Acciones']} rows={servicios.map((s) => [new Date(s.fecha).toLocaleDateString('es'), s.usuario_nombre, s.cantidad_copias, s.tipo_impresion, s.costo || '-', <ActionButtons key={s.id} onEdit={() => edit(s)} onDelete={() => remove(s.id)} />])} />
     </section>
   );
@@ -1184,6 +1191,7 @@ function ModuloVideo({ usuarios, servicios, onReload, toastSuccess, toastError, 
           <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar registro'}</SubmitButton>
         </form>
       )}
+
       <SimpleTable headers={['Fecha', 'Usuario', 'Propósito', 'Hora', 'Duración', 'Acciones']} rows={servicios.map((s) => [new Date(s.fecha).toLocaleDateString('es'), s.usuario_nombre, s.proposito, s.hora_inicio, s.duracion_minutos ? `${s.duracion_minutos} min` : '-', <ActionButtons key={s.id} onEdit={() => edit(s)} onDelete={() => remove(s.id)} />])} />
     </section>
   );
@@ -1242,6 +1250,7 @@ function ModuloLectura({ actividades, onReload, toastSuccess, toastError, confir
           <SubmitButton>{editId ? 'Guardar cambios' : 'Guardar actividad'}</SubmitButton>
         </form>
       )}
+
       <SimpleTable headers={['Actividad', 'Tipo', 'Fecha', 'Participantes', 'Acciones']} rows={actividades.map((a) => [a.nombre_actividad, a.tipo, new Date(a.fecha).toLocaleDateString('es'), a.participantes || '-', <ActionButtons key={a.id} onEdit={() => edit(a)} onDelete={() => remove(a.id)} />])} />
     </section>
   );
@@ -1318,86 +1327,4 @@ function Select({ options, className = '', ...props }) {
 
 function SubmitButton({ children }) {
   return <button className="w-full bg-gradient-to-r from-amber-600 to-orange-700 text-white font-bold py-3 rounded-xl">{children}</button>;
-}
-
-// ... (asegúrate de que este código pegue justo después de la función SubmitButton)
-
-function SimpleTable({ headers, rows }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-xl overflow-x-auto border border-amber-100">
-      <table className="w-full">
-        <thead className="bg-gradient-to-r from-amber-700 to-red-700 text-white">
-          <tr>
-            {headers.map((h) => (
-              <th key={h} className="px-4 py-3 text-left font-bold text-sm uppercase tracking-wider">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-amber-50">
-          {rows.map((row, idx) => (
-            <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-amber-50 hover:bg-amber-100 transition-colors'}>
-              {row.map((cell, i) => (
-                <td key={i} className="px-4 py-3 text-gray-700 text-sm">
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={headers.length} className="px-4 py-10 text-center text-gray-400 italic">
-                No hay registros para mostrar.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function FormGrid({ children }) {
-  return <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>;
-}
-
-function Input({ as = 'input', className = '', ...props }) {
-  const styles = `px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-200 focus:border-amber-500 transition-all outline-none ${className}`;
-  if (as === 'textarea') return <textarea {...props} rows={3} className={styles} />;
-  return <input {...props} className={styles} />;
-}
-
-function Select({ options, className = '', ...props }) {
-  return (
-    <select
-      {...props}
-      className={`px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-200 focus:border-amber-500 transition-all outline-none bg-white ${className}`}
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function ToastViewport({ toasts }) {
-  return (
-    <div className="fixed top-4 right-4 z-[110] space-y-2 w-[min(360px,calc(100vw-2rem))]">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className={`rounded-xl shadow-xl border px-4 py-3 text-sm font-medium animate-in slide-in-from-right duration-300 ${
-            t.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-900' 
-              : 'bg-red-50 border-red-200 text-red-900'
-          }`}
-        >
-          {t.message}
-        </div>
-      ))}
-    </div>
-  );
 }

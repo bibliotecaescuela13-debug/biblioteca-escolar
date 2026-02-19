@@ -1,18 +1,45 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Configura estas variables en tu archivo .env
-// Las encontrarás en: https://app.supabase.com/project/YOUR_PROJECT/settings/api
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const runtimeEnv = import.meta.env || {}
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+const rawSupabaseUrl =
+  runtimeEnv.VITE_SUPABASE_URL ||
+  runtimeEnv.NEXT_PUBLIC_SUPABASE_URL ||
+  ''
 
-// Evita que la app falle al iniciar cuando faltan variables de entorno.
-// Se usa un fallback válido para que createClient no lance error por URL inválida.
+const rawSupabaseAnonKey =
+  runtimeEnv.VITE_SUPABASE_ANON_KEY ||
+  runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  ''
+
+const isValidHttpUrl = (value) => {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+const hasValidSupabaseUrl = isValidHttpUrl(rawSupabaseUrl)
+
+export const isSupabaseConfigured = Boolean(
+  hasValidSupabaseUrl && rawSupabaseAnonKey
+)
+
 const fallbackUrl = 'https://example.supabase.co'
 const fallbackAnonKey = 'public-anon-key'
 
-export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : fallbackUrl,
-  isSupabaseConfigured ? supabaseAnonKey : fallbackAnonKey
-)
+let supabaseClient
+
+try {
+  supabaseClient = createClient(
+    isSupabaseConfigured ? rawSupabaseUrl : fallbackUrl,
+    isSupabaseConfigured ? rawSupabaseAnonKey : fallbackAnonKey
+  )
+} catch (error) {
+  console.warn('[supabase] configuración inválida, usando cliente de fallback.', error)
+  supabaseClient = createClient(fallbackUrl, fallbackAnonKey)
+}
+
+export const supabase = supabaseClient
