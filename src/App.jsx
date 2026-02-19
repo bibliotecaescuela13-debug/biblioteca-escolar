@@ -1319,6 +1319,7 @@ function Select({ options, className = '', ...props }) {
 function SubmitButton({ children }) {
   return <button className="w-full bg-gradient-to-r from-amber-600 to-orange-700 text-white font-bold py-3 rounded-xl">{children}</button>;
 }
+<<<<<<< codex/fix-invalid-supabaseurl-error-f08que
 // ... (continuación del código después de la función SubmitButton)
 
 // --- COMPONENTES DE INTERFAZ RESTANTES ---
@@ -1349,6 +1350,11 @@ function ToastViewport({ toasts }) {
 /**
  * Estructura de tabla simple reutilizable
  */
+=======
+
+// ... (asegúrate de que este código pegue justo después de la función SubmitButton)
+
+>>>>>>> main
 function SimpleTable({ headers, rows }) {
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-x-auto border border-amber-100">
@@ -1363,6 +1369,7 @@ function SimpleTable({ headers, rows }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-amber-50">
+<<<<<<< codex/fix-invalid-supabaseurl-error-f08que
           {rows.length > 0 ? (
             rows.map((row, idx) => (
               <tr key={idx} className="hover:bg-amber-50/50 transition-colors">
@@ -1376,6 +1383,20 @@ function SimpleTable({ headers, rows }) {
           ) : (
             <tr>
               <td colSpan={headers.length} className="px-4 py-8 text-center text-gray-500 italic">
+=======
+          {rows.map((row, idx) => (
+            <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-amber-50 hover:bg-amber-100 transition-colors'}>
+              {row.map((cell, i) => (
+                <td key={i} className="px-4 py-3 text-gray-700 text-sm">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={headers.length} className="px-4 py-10 text-center text-gray-400 italic">
+>>>>>>> main
                 No hay registros para mostrar.
               </td>
             </tr>
@@ -1384,4 +1405,52 @@ function SimpleTable({ headers, rows }) {
       </table>
     </div>
   );
+<<<<<<< codex/fix-invalid-supabaseurl-error-f08que
 }
+=======
+}
+
+function FormGrid({ children }) {
+  return <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>;
+}
+
+function Input({ as = 'input', className = '', ...props }) {
+  const styles = `px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-200 focus:border-amber-500 transition-all outline-none ${className}`;
+  if (as === 'textarea') return <textarea {...props} rows={3} className={styles} />;
+  return <input {...props} className={styles} />;
+}
+
+function Select({ options, className = '', ...props }) {
+  return (
+    <select
+      {...props}
+      className={`px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-200 focus:border-amber-500 transition-all outline-none bg-white ${className}`}
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ToastViewport({ toasts }) {
+  return (
+    <div className="fixed top-4 right-4 z-[110] space-y-2 w-[min(360px,calc(100vw-2rem))]">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`rounded-xl shadow-xl border px-4 py-3 text-sm font-medium animate-in slide-in-from-right duration-300 ${
+            t.type === 'success' 
+              ? 'bg-green-50 border-green-200 text-green-900' 
+              : 'bg-red-50 border-red-200 text-red-900'
+          }`}
+        >
+          {t.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+>>>>>>> main
