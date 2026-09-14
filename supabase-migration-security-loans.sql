@@ -1,71 +1,83 @@
--- ============================================
--- MÓDULO DE LIBROS - PARA IMPLEMENTAR DESPUÉS
--- ============================================
--- Este schema está listo para cuando necesites agregar gestión de libros
--- Simplemente ejecuta este SQL en Supabase cuando lo necesites
+-- Apply this file once in the Supabase SQL Editor after the existing schemas.
+-- It protects administrative data and makes book availability consistent with loans.
 
--- Tabla de libros
-CREATE TABLE libros (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  isbn TEXT,
-  titulo TEXT NOT NULL,
-  autor TEXT,
-  editorial TEXT,
-  anio_publicacion INTEGER,
-  categoria TEXT,
-  ubicacion TEXT, -- Ej: "Estante 3, Fila 2"
-  estado TEXT CHECK (estado IN ('disponible', 'prestado', 'mantenimiento', 'perdido')) DEFAULT 'disponible',
-  cantidad_total INTEGER DEFAULT 1,
-  cantidad_disponible INTEGER DEFAULT 1,
-  portada_url TEXT,
-  descripcion TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+begin;
 
--- Tabla de préstamos
-CREATE TABLE prestamos (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  libro_id UUID REFERENCES libros(id) ON DELETE RESTRICT,
-  usuario_id UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
-  libro_titulo TEXT NOT NULL,
-  usuario_nombre TEXT NOT NULL,
-  fecha_prestamo DATE NOT NULL DEFAULT CURRENT_DATE,
-  fecha_devolucion_esperada DATE NOT NULL,
-  fecha_devolucion_real DATE,
-  estado TEXT CHECK (estado IN ('activo', 'devuelto', 'vencido')) DEFAULT 'activo',
-  notas TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+create or replace function public.is_library_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((auth.jwt() ->> 'email') = 'bibliotecamarianomoreno9@gmail.com', false);
+$$;
 
--- Índices para mejorar rendimiento
-CREATE INDEX idx_libros_titulo ON libros(titulo);
-CREATE INDEX idx_libros_autor ON libros(autor);
-CREATE INDEX idx_libros_isbn ON libros(isbn);
-CREATE INDEX idx_libros_estado ON libros(estado);
-CREATE INDEX idx_prestamos_usuario ON prestamos(usuario_id);
-CREATE INDEX idx_prestamos_libro ON prestamos(libro_id);
-CREATE INDEX idx_prestamos_estado ON prestamos(estado);
-CREATE INDEX idx_prestamos_fecha_devolucion ON prestamos(fecha_devolucion_esperada);
+revoke all on function public.is_library_admin() from public;
+grant execute on function public.is_library_admin() to authenticated;
 
--- Habilitar RLS
-ALTER TABLE libros ENABLE ROW LEVEL SECURITY;
-ALTER TABLE prestamos ENABLE ROW LEVEL SECURITY;
+drop policy if exists "Enable all access for usuarios" on public.usuarios;
+drop policy if exists "Enable all access for servicios_impresion" on public.servicios_impresion;
+drop policy if exists "Enable all access for servicios_video" on public.servicios_video;
+drop policy if exists "Enable all access for actividades_lectura" on public.actividades_lectura;
+drop policy if exists "Enable all access for asistencia_lectura" on public.asistencia_lectura;
+drop policy if exists "Enable all access for libros" on public.libros;
+drop policy if exists "Enable all access for prestamos" on public.prestamos;
+drop policy if exists "Public read access for libros" on public.libros;
+drop policy if exists "Library admin full access for libros" on public.libros;
+drop policy if exists "Library admin full access for usuarios" on public.usuarios;
+drop policy if exists "Library admin full access for prestamos" on public.prestamos;
+drop policy if exists "Library admin full access for servicios_impresion" on public.servicios_impresion;
+drop policy if exists "Library admin full access for servicios_video" on public.servicios_video;
+drop policy if exists "Library admin full access for actividades_lectura" on public.actividades_lectura;
+drop policy if exists "Library admin full access for asistencia_lectura" on public.asistencia_lectura;
 
--- El catálogo es público; toda operación administrativa exige autenticación
--- y el rol definido por public.is_library_admin() en supabase-schema.sql.
-CREATE POLICY "Public read access for libros"
-ON libros FOR SELECT TO anon, authenticated
-USING (true);
+create policy "Public read access for libros"
+on public.libros for select
+to anon, authenticated
+using (true);
 
-CREATE POLICY "Library admin full access for libros"
-ON libros FOR ALL TO authenticated
-USING (public.is_library_admin())
-WITH CHECK (public.is_library_admin());
+create policy "Library admin full access for libros"
+on public.libros for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
 
-CREATE POLICY "Library admin full access for prestamos"
-ON prestamos FOR ALL TO authenticated
-USING (public.is_library_admin())
-WITH CHECK (public.is_library_admin());
+create policy "Library admin full access for usuarios"
+on public.usuarios for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
+
+create policy "Library admin full access for prestamos"
+on public.prestamos for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
+
+create policy "Library admin full access for servicios_impresion"
+on public.servicios_impresion for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
+
+create policy "Library admin full access for servicios_video"
+on public.servicios_video for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
+
+create policy "Library admin full access for actividades_lectura"
+on public.actividades_lectura for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
+
+create policy "Library admin full access for asistencia_lectura"
+on public.asistencia_lectura for all
+to authenticated
+using (public.is_library_admin())
+with check (public.is_library_admin());
 
 do $$
 begin
@@ -193,32 +205,4 @@ create trigger trigger_ajustar_disponibilidad_por_total
 before update of cantidad_total, cantidad_disponible on public.libros
 for each row execute function public.ajustar_disponibilidad_por_total();
 
-
--- Vista para préstamos activos con información completa
-CREATE VIEW vista_prestamos_activos AS
-SELECT 
-  p.*,
-  l.titulo as libro_titulo_completo,
-  l.autor,
-  l.isbn,
-  u.nombre as usuario_nombre_completo,
-  u.tipo as usuario_tipo,
-  u.telefono,
-  u.email,
-  CASE 
-    WHEN p.fecha_devolucion_esperada < CURRENT_DATE THEN 'vencido'
-    WHEN p.fecha_devolucion_esperada <= CURRENT_DATE + INTERVAL '3 days' THEN 'por_vencer'
-    ELSE 'activo'
-  END as alerta
-FROM prestamos p
-JOIN libros l ON p.libro_id = l.id
-JOIN usuarios u ON p.usuario_id = u.id
-WHERE p.estado = 'activo';
-
--- DATOS DE EJEMPLO (opcional - elimina esto si no quieres datos de prueba)
-/*
-INSERT INTO libros (titulo, autor, editorial, categoria, ubicacion, cantidad_total, cantidad_disponible) VALUES
-('Cien Años de Soledad', 'Gabriel García Márquez', 'Sudamericana', 'Novela', 'Estante 1, Fila A', 3, 3),
-('El Principito', 'Antoine de Saint-Exupéry', 'Salamandra', 'Infantil', 'Estante 2, Fila B', 5, 5),
-('Don Quijote de la Mancha', 'Miguel de Cervantes', 'RAE', 'Clásico', 'Estante 1, Fila C', 2, 2);
-*/
+commit;

@@ -717,9 +717,14 @@ function ModuloCatalogacion({ libros, onReload, toastSuccess, toastError, confir
       ubicacion: formData.ubicacion || null,
       portada_url: formData.portada_url || null,
       cantidad_total: total,
-      cantidad_disponible: total,
-      estado: total > 0 ? 'disponible' : 'prestado',
     };
+
+    // Availability is derived by the database from active loans. Only a new
+    // catalog record starts with all of its copies available.
+    if (!editId) {
+      payload.cantidad_disponible = total;
+      payload.estado = total > 0 ? 'disponible' : 'prestado';
+    }
 
     const { error } = editId
       ? await supabase.from('libros').update(payload).eq('id', editId)
@@ -730,7 +735,7 @@ function ModuloCatalogacion({ libros, onReload, toastSuccess, toastError, confir
     setEditId(null);
     setFormData(empty);
     setShowForm(false);
-    onReload();
+    await onReload();
   };
 
   const runLookup = async () => {
@@ -786,7 +791,7 @@ function ModuloCatalogacion({ libros, onReload, toastSuccess, toastError, confir
     const { error } = await supabase.from('libros').delete().eq('id', id);
     if (error) return toastError(error.message);
     toastSuccess('Libro eliminado.');
-    onReload();
+    await onReload();
   };
 
   return (
@@ -895,7 +900,7 @@ function ModuloPrestamos({ libros, usuarios, prestamos, onReload, toastSuccess, 
     setEditId(null);
     setFormData(empty);
     setShowForm(false);
-    onReload();
+    await onReload();
   };
 
   const edit = (row) => {
@@ -916,7 +921,7 @@ function ModuloPrestamos({ libros, usuarios, prestamos, onReload, toastSuccess, 
     const { error } = await supabase.from('prestamos').delete().eq('id', id);
     if (error) return toastError(error.message);
     toastSuccess('Préstamo eliminado.');
-    onReload();
+    await onReload();
   };
 
   const markReturned = async (row) => {
@@ -928,7 +933,7 @@ function ModuloPrestamos({ libros, usuarios, prestamos, onReload, toastSuccess, 
       .eq('id', row.id);
     if (error) return toastError(error.message);
     toastSuccess('Devolución registrada.');
-    onReload();
+    await onReload();
   };
 
   const today = new Date().toISOString().split('T')[0];
@@ -1034,7 +1039,7 @@ function ModuloUsuarios({ usuarios, onReload, toastSuccess, toastError, confirmA
     setEditId(null);
     setFormData(empty);
     setShowForm(false);
-    onReload();
+    await onReload();
   };
 
   const edit = (u) => {
@@ -1058,7 +1063,7 @@ function ModuloUsuarios({ usuarios, onReload, toastSuccess, toastError, confirmA
     const { error } = await supabase.from('usuarios').delete().eq('id', id);
     if (error) return toastError(error.message);
     toastSuccess('Usuario eliminado.');
-    onReload();
+    await onReload();
   };
 
   const importCsv = async (e) => {
@@ -1072,7 +1077,7 @@ function ModuloUsuarios({ usuarios, onReload, toastSuccess, toastError, confirmA
     if (error) return toastError(error.message);
     toastSuccess(`${rows.length} usuarios importados.`);
     setShowImport(false);
-    onReload();
+    await onReload();
   };
 
   return (
@@ -1140,7 +1145,7 @@ function ModuloImpresion({ usuarios, servicios, onReload, toastSuccess, toastErr
     setEditId(null);
     setFormData(empty);
     setShowForm(false);
-    onReload();
+    await onReload();
   };
 
   const edit = (row) => {
@@ -1156,7 +1161,7 @@ function ModuloImpresion({ usuarios, servicios, onReload, toastSuccess, toastErr
     const { error } = await supabase.from('servicios_impresion').delete().eq('id', id);
     if (error) return toastError(error.message);
     toastSuccess('Registro eliminado.');
-    onReload();
+    await onReload();
   };
 
   return (
@@ -1210,7 +1215,7 @@ function ModuloVideo({ usuarios, servicios, onReload, toastSuccess, toastError, 
     setEditId(null);
     setFormData(empty);
     setShowForm(false);
-    onReload();
+    await onReload();
   };
 
   const edit = (row) => {
@@ -1226,7 +1231,7 @@ function ModuloVideo({ usuarios, servicios, onReload, toastSuccess, toastError, 
     const { error } = await supabase.from('servicios_video').delete().eq('id', id);
     if (error) return toastError(error.message);
     toastSuccess('Registro eliminado.');
-    onReload();
+    await onReload();
   };
 
   return (
@@ -1268,7 +1273,7 @@ function ModuloLectura({ actividades, onReload, toastSuccess, toastError, confir
     setEditId(null);
     setFormData(empty);
     setShowForm(false);
-    onReload();
+    await onReload();
   };
 
   const edit = (row) => {
@@ -1284,7 +1289,7 @@ function ModuloLectura({ actividades, onReload, toastSuccess, toastError, confir
     const { error } = await supabase.from('actividades_lectura').delete().eq('id', id);
     if (error) return toastError(error.message);
     toastSuccess('Actividad eliminada.');
-    onReload();
+    await onReload();
   };
 
   return (
