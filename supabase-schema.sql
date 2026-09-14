@@ -79,9 +79,42 @@ ALTER TABLE servicios_video ENABLE ROW LEVEL SECURITY;
 ALTER TABLE actividades_lectura ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asistencia_lectura ENABLE ROW LEVEL SECURITY;
 
--- Políticas básicas (permitir todo por ahora - ajustar según necesidades)
-CREATE POLICY "Enable all access for usuarios" ON usuarios FOR ALL USING (true);
-CREATE POLICY "Enable all access for servicios_impresion" ON servicios_impresion FOR ALL USING (true);
-CREATE POLICY "Enable all access for servicios_video" ON servicios_video FOR ALL USING (true);
-CREATE POLICY "Enable all access for actividades_lectura" ON actividades_lectura FOR ALL USING (true);
-CREATE POLICY "Enable all access for asistencia_lectura" ON asistencia_lectura FOR ALL USING (true);
+-- El acceso administrativo se decide en la base de datos, no en el navegador.
+-- La cuenta debe existir en Supabase Auth con este mismo correo.
+CREATE OR REPLACE FUNCTION public.is_library_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $admin$
+  SELECT COALESCE((auth.jwt() ->> 'email') = 'bibliotecamarianomoreno9@gmail.com', false);
+$admin$;
+
+REVOKE ALL ON FUNCTION public.is_library_admin() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_library_admin() TO authenticated;
+
+CREATE POLICY "Library admin full access for usuarios"
+ON usuarios FOR ALL TO authenticated
+USING (public.is_library_admin())
+WITH CHECK (public.is_library_admin());
+
+CREATE POLICY "Library admin full access for servicios_impresion"
+ON servicios_impresion FOR ALL TO authenticated
+USING (public.is_library_admin())
+WITH CHECK (public.is_library_admin());
+
+CREATE POLICY "Library admin full access for servicios_video"
+ON servicios_video FOR ALL TO authenticated
+USING (public.is_library_admin())
+WITH CHECK (public.is_library_admin());
+
+CREATE POLICY "Library admin full access for actividades_lectura"
+ON actividades_lectura FOR ALL TO authenticated
+USING (public.is_library_admin())
+WITH CHECK (public.is_library_admin());
+
+CREATE POLICY "Library admin full access for asistencia_lectura"
+ON asistencia_lectura FOR ALL TO authenticated
+USING (public.is_library_admin())
+WITH CHECK (public.is_library_admin());
